@@ -13,13 +13,13 @@ import (
 func TestEntitlementKeyFormat(t *testing.T) {
 	userID := "user123"
 	featureCode := "premium_feature"
-	
+
 	// Test the key format that should be used: "entl:{userID}:{featureCode}"
 	expectedKey := fmt.Sprintf("entl:%s:%s", userID, featureCode)
 	if expectedKey != "entl:user123:premium_feature" {
 		t.Errorf("Key format should be 'entl:{userID}:{featureCode}', got %s", expectedKey)
 	}
-	
+
 	// Test with special characters
 	userIDWithSpecial := "user-123_test"
 	featureCodeWithSpecial := "premium-feature_v2"
@@ -39,21 +39,19 @@ func TestEntitlementStructure(t *testing.T) {
 		Status:      "active",
 		GrantedAt:   time.Now(),
 	}
-	
+
 	if testEntitlement.UserID != "user123" {
 		t.Error("UserID should be set correctly")
 	}
-	
+
 	if testEntitlement.FeatureCode != "feature456" {
 		t.Error("FeatureCode should be set correctly")
 	}
-	
+
 	if testEntitlement.Status != "active" {
 		t.Error("Status should be set correctly")
 	}
 }
-
-
 
 // TestTTLDefaults verifies TTL behavior
 func TestTTLDefaults(t *testing.T) {
@@ -62,13 +60,13 @@ func TestTTLDefaults(t *testing.T) {
 	if defaultTTL != 2*time.Minute {
 		t.Error("Default TTL should be 2 minutes")
 	}
-	
+
 	// Test that negative result TTL is 10 seconds max
 	negativeTTL := 10 * time.Second
 	if negativeTTL != 10*time.Second {
 		t.Error("Negative result TTL should be 10 seconds")
 	}
-	
+
 	// Verify negative TTL is much shorter than default TTL
 	if negativeTTL >= defaultTTL {
 		t.Error("Negative result TTL should be much shorter than default TTL")

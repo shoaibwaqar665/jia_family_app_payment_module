@@ -21,14 +21,14 @@ func (e DomainError) Error() string {
 
 // Common domain error codes
 const (
-	ErrCodeInvalidInput     = "INVALID_INPUT"
-	ErrCodeNotFound         = "NOT_FOUND"
-	ErrCodeAlreadyExists    = "ALREADY_EXISTS"
-	ErrCodeInvalidState     = "INVALID_STATE"
+	ErrCodeInvalidInput      = "INVALID_INPUT"
+	ErrCodeNotFound          = "NOT_FOUND"
+	ErrCodeAlreadyExists     = "ALREADY_EXISTS"
+	ErrCodeInvalidState      = "INVALID_STATE"
 	ErrCodeInsufficientFunds = "INSUFFICIENT_FUNDS"
-	ErrCodePaymentFailed    = "PAYMENT_FAILED"
-	ErrCodeUnauthorized     = "UNAUTHORIZED"
-	ErrCodeInternal         = "INTERNAL_ERROR"
+	ErrCodePaymentFailed     = "PAYMENT_FAILED"
+	ErrCodeUnauthorized      = "UNAUTHORIZED"
+	ErrCodeInternal          = "INTERNAL_ERROR"
 )
 
 // NewInvalidInputError creates a new invalid input error
