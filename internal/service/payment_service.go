@@ -19,11 +19,11 @@ import (
 
 // PaymentService provides payment business logic and implements PaymentServiceServer
 type PaymentService struct {
-	paymentRepo     repository.PaymentRepository
-	planRepo        repository.PlanRepository
-	entitlementRepo repository.EntitlementRepository
-	cache           *cache.Cache
-	eventPublisher  events.Publisher
+	paymentRepo          repository.PaymentRepository
+	planRepo             repository.PlanRepository
+	entitlementRepo      repository.EntitlementRepository
+	cache                *cache.Cache
+	entitlementPublisher events.EntitlementPublisher
 }
 
 // NewPaymentService creates a new payment service
@@ -32,14 +32,14 @@ func NewPaymentService(
 	planRepo repository.PlanRepository,
 	entitlementRepo repository.EntitlementRepository,
 	cache *cache.Cache,
-	eventPublisher events.Publisher,
+	entitlementPublisher events.EntitlementPublisher,
 ) *PaymentService {
 	return &PaymentService{
-		paymentRepo:     paymentRepo,
-		planRepo:        planRepo,
-		entitlementRepo: entitlementRepo,
-		cache:           cache,
-		eventPublisher:  eventPublisher,
+		paymentRepo:          paymentRepo,
+		planRepo:             planRepo,
+		entitlementRepo:      entitlementRepo,
+		cache:                cache,
+		entitlementPublisher: entitlementPublisher,
 	}
 }
 
@@ -357,16 +357,8 @@ func (s *PaymentService) PaymentSuccessWebhook(ctx context.Context, payload []by
 	}
 
 	// Publish entitlement.updated event
-	if s.eventPublisher != nil {
-		eventData := map[string]interface{}{
-			"entitlement_id": savedEntitlement.ID.String(),
-			"user_id":        savedEntitlement.UserID,
-			"feature_code":   savedEntitlement.FeatureCode,
-			"plan_id":        savedEntitlement.PlanID.String(),
-			"status":         savedEntitlement.Status,
-		}
-		event := events.NewEvent("entitlement.updated", "entitlement", eventData)
-		if err := s.eventPublisher.Publish(ctx, event); err != nil {
+	if s.entitlementPublisher != nil {
+		if err := s.entitlementPublisher.PublishEntitlementUpdated(ctx, savedEntitlement, "created"); err != nil {
 			log.Error(ctx, "Failed to publish entitlement.updated event", zap.Error(err))
 		}
 	}
