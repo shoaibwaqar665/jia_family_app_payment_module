@@ -19,20 +19,25 @@ import (
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jia-app/paymentservice/internal/config"
 	"github.com/jia-app/paymentservice/internal/log"
 	"github.com/jia-app/paymentservice/internal/server/interceptors"
+	"github.com/redis/go-redis/v9"
 )
 
 // GRPCServer represents a gRPC server
 type GRPCServer struct {
-	server *grpc.Server
-	config *config.Config
-	logger *zap.Logger
+	server       *grpc.Server
+	config       *config.Config
+	logger       *zap.Logger
+	healthServer *health.Server
+	dbPool       *pgxpool.Pool
+	redisClient  *redis.Client
 }
 
 // NewGRPCServer creates a new gRPC server instance with all interceptors
-func NewGRPCServer(cfg *config.Config) *GRPCServer {
+func NewGRPCServer(cfg *config.Config, dbPool *pgxpool.Pool, redisClient *redis.Client) *GRPCServer {
 	// Get logger instance
 	logger := log.L(context.Background())
 
@@ -73,8 +78,8 @@ func NewGRPCServer(cfg *config.Config) *GRPCServer {
 	healthServer := health.NewServer()
 	healthpb.RegisterHealthServer(server, healthServer)
 
-	// Set initial health status
-	healthServer.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
+	// Set initial health status to NOT_SERVING until dependencies are healthy
+	healthServer.SetServingStatus("", healthpb.HealthCheckResponse_NOT_SERVING)
 
 	// Register reflection service for non-production environments
 	env := os.Getenv("ENV")
@@ -84,9 +89,12 @@ func NewGRPCServer(cfg *config.Config) *GRPCServer {
 	}
 
 	return &GRPCServer{
-		server: server,
-		config: cfg,
-		logger: logger,
+		server:       server,
+		config:       cfg,
+		logger:       logger,
+		healthServer: healthServer,
+		dbPool:       dbPool,
+		redisClient:  redisClient,
 	}
 }
 
@@ -98,6 +106,98 @@ func (s *GRPCServer) RegisterService(desc *grpc.ServiceDesc, impl interface{}) {
 // GetServer returns the underlying gRPC server
 func (s *GRPCServer) GetServer() *grpc.Server {
 	return s.server
+}
+
+// StartHealthMonitoring starts background health checks for dependencies
+func (s *GRPCServer) StartHealthMonitoring(ctx context.Context) {
+	go s.monitorHealth(ctx)
+
+	// Wait for initial health check to complete
+	go s.waitForInitialHealth(ctx)
+}
+
+// waitForInitialHealth waits for dependencies to be healthy before setting status to SERVING
+func (s *GRPCServer) waitForInitialHealth(ctx context.Context) {
+	// Wait a bit for initial connections to stabilize
+	time.Sleep(2 * time.Second)
+
+	// Check dependencies immediately
+	s.checkDependencies()
+
+	s.logger.Info("Initial health check completed")
+}
+
+// monitorHealth runs background health checks for DB and Redis
+func (s *GRPCServer) monitorHealth(ctx context.Context) {
+	ticker := time.NewTicker(30 * time.Second) // Check every 30 seconds
+	defer ticker.Stop()
+
+	s.logger.Info("Starting health monitoring for dependencies")
+
+	// Initial health check
+	s.checkDependencies()
+
+	// Periodic health checks
+	for {
+		select {
+		case <-ctx.Done():
+			s.logger.Info("Health monitoring stopped due to context cancellation")
+			return
+		case <-ticker.C:
+			s.checkDependencies()
+		}
+	}
+}
+
+// checkDependencies checks the health of DB and Redis
+func (s *GRPCServer) checkDependencies() {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Check database health
+	dbHealthy := s.checkDatabase(ctx)
+
+	// Check Redis health
+	redisHealthy := s.checkRedis(ctx)
+
+	// Set overall health status
+	if dbHealthy && redisHealthy {
+		s.healthServer.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
+		s.logger.Debug("All dependencies healthy, setting status to SERVING")
+	} else {
+		s.healthServer.SetServingStatus("", healthpb.HealthCheckResponse_NOT_SERVING)
+		s.logger.Warn("Dependencies unhealthy, setting status to NOT_SERVING",
+			zap.Bool("db_healthy", dbHealthy),
+			zap.Bool("redis_healthy", redisHealthy))
+	}
+}
+
+// checkDatabase checks if the database is reachable
+func (s *GRPCServer) checkDatabase(ctx context.Context) bool {
+	if s.dbPool == nil {
+		return false
+	}
+
+	if err := s.dbPool.Ping(ctx); err != nil {
+		s.logger.Debug("Database health check failed", zap.Error(err))
+		return false
+	}
+
+	return true
+}
+
+// checkRedis checks if Redis is reachable
+func (s *GRPCServer) checkRedis(ctx context.Context) bool {
+	if s.redisClient == nil {
+		return false
+	}
+
+	if err := s.redisClient.Ping(ctx).Err(); err != nil {
+		s.logger.Debug("Redis health check failed", zap.Error(err))
+		return false
+	}
+
+	return true
 }
 
 // Serve starts the gRPC server and handles graceful shutdown
