@@ -1,0 +1,119 @@
+syntax = "proto3";
+
+package payment.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/jia-app/paymentservice/proto/payment/v1;paymentv1";
+
+// PaymentService provides payment processing functionality
+service PaymentService {
+  // CreatePayment creates a new payment
+  rpc CreatePayment(CreatePaymentRequest) returns (CreatePaymentResponse);
+  
+  // GetPayment retrieves a payment by ID
+  rpc GetPayment(GetPaymentRequest) returns (GetPaymentResponse);
+  
+  // UpdatePaymentStatus updates the status of a payment
+  rpc UpdatePaymentStatus(UpdatePaymentStatusRequest) returns (UpdatePaymentStatusResponse);
+  
+  // GetPaymentsByCustomer retrieves payments for a customer
+  rpc GetPaymentsByCustomer(GetPaymentsByCustomerRequest) returns (GetPaymentsByCustomerResponse);
+  
+  // ListPayments retrieves a list of payments with pagination
+  rpc ListPayments(ListPaymentsRequest) returns (ListPaymentsResponse);
+}
+
+// CreatePaymentRequest represents a request to create a payment
+message CreatePaymentRequest {
+  int64 amount = 1;           // Amount in cents
+  string currency = 2;        // Currency code (e.g., USD, EUR)
+  string payment_method = 3;  // Payment method
+  string customer_id = 4;     // Customer identifier
+  string order_id = 5;        // Order identifier
+  string description = 6;     // Payment description
+}
+
+// CreatePaymentResponse represents a response to payment creation
+message CreatePaymentResponse {
+  Payment payment = 1;
+}
+
+// GetPaymentRequest represents a request to retrieve a payment
+message GetPaymentRequest {
+  string id = 1;  // Payment ID
+}
+
+// GetPaymentResponse represents a response with payment details
+message GetPaymentResponse {
+  Payment payment = 1;
+}
+
+// UpdatePaymentStatusRequest represents a request to update payment status
+message UpdatePaymentStatusRequest {
+  string id = 1;      // Payment ID
+  string status = 2;  // New status
+}
+
+// UpdatePaymentStatusResponse represents a response to status update
+message UpdatePaymentStatusResponse {
+  bool success = 1;
+}
+
+// GetPaymentsByCustomerRequest represents a request to get customer payments
+message GetPaymentsByCustomerRequest {
+  string customer_id = 1;  // Customer identifier
+  int32 limit = 2;         // Maximum number of payments to return
+  int32 offset = 3;        // Number of payments to skip
+}
+
+// GetPaymentsByCustomerResponse represents a response with customer payments
+message GetPaymentsByCustomerResponse {
+  repeated Payment payments = 1;
+  int32 total = 2;
+}
+
+// ListPaymentsRequest represents a request to list payments
+message ListPaymentsRequest {
+  int32 limit = 1;   // Maximum number of payments to return
+  int32 offset = 2;  // Number of payments to skip
+}
+
+// ListPaymentsResponse represents a response with payments list
+message ListPaymentsResponse {
+  repeated Payment payments = 1;
+  int32 total = 2;
+}
+
+// Payment represents a payment transaction
+message Payment {
+  string id = 1;                    // Payment identifier
+  int64 amount = 2;                 // Amount in cents
+  string currency = 3;              // Currency code
+  string status = 4;                // Payment status
+  string payment_method = 5;        // Payment method
+  string customer_id = 6;           // Customer identifier
+  string order_id = 7;              // Order identifier
+  string description = 8;           // Payment description
+  google.protobuf.Timestamp created_at = 9;   // Creation timestamp
+  google.protobuf.Timestamp updated_at = 10;  // Last update timestamp
+}
+
+// PaymentStatus represents the status of a payment
+enum PaymentStatus {
+  PAYMENT_STATUS_UNSPECIFIED = 0;
+  PAYMENT_STATUS_PENDING = 1;
+  PAYMENT_STATUS_COMPLETED = 2;
+  PAYMENT_STATUS_FAILED = 3;
+  PAYMENT_STATUS_CANCELLED = 4;
+  PAYMENT_STATUS_REFUNDED = 5;
+}
+
+// PaymentMethod represents the method used for payment
+enum PaymentMethod {
+  PAYMENT_METHOD_UNSPECIFIED = 0;
+  PAYMENT_METHOD_CREDIT_CARD = 1;
+  PAYMENT_METHOD_DEBIT_CARD = 2;
+  PAYMENT_METHOD_BANK_TRANSFER = 3;
+  PAYMENT_METHOD_DIGITAL_WALLET = 4;
+}
