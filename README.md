@@ -8,6 +8,7 @@ A Go-based microservice for handling payment processing operations with plans an
 - **PostgreSQL**: Persistent storage with migrations
 - **Redis**: Caching layer for improved performance
 - **Structured Logging**: Using Zap logger with context-aware logging
+- **Authentication**: gRPC interceptor with token validation and user context injection
 - **Configuration Management**: Using Viper
 - **Docker Support**: Containerized deployment
 - **Health Checks**: Built-in health monitoring
@@ -102,6 +103,36 @@ export EVENTS_PROVIDER="kafka"
 
 ### Configuration File
 See `config.yaml` for the complete configuration structure and defaults.
+
+## Authentication
+
+The service includes a gRPC authentication interceptor that:
+
+### Features
+- **Token Validation**: Validates `better-auth-token` metadata (with fallback to `authorization`)
+- **User Context Injection**: Automatically injects `user_id` into context and logs
+- **Method Whitelisting**: Allows specific methods to skip authentication (e.g., webhooks)
+- **Stub Implementation**: Currently treats any non-empty token as valid
+
+### Whitelisted Methods
+- `/payment.v1.PaymentService/PaymentSuccessWebhook` - No authentication required
+
+### Token Format
+- **Direct**: `spiff_id_12345`
+- **Bearer**: `Bearer spiff_id_12345`
+- **Custom**: Any non-empty token generates a fake `spiff_id_*`
+
+### Usage
+```go
+// Create auth interceptor
+authInterceptor := interceptors.NewAuthInterceptor()
+
+// Add to gRPC server
+server := grpc.NewServer(
+    grpc.UnaryInterceptor(authInterceptor.Unary()),
+    grpc.StreamInterceptor(authInterceptor.Stream()),
+)
+```
 
 ## Logging
 
