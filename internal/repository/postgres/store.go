@@ -36,6 +36,15 @@ func NewStore(connString string) (*Store, error) {
 	return &Store{db: pool}, nil
 }
 
+// NewStoreWithPool creates a new PostgreSQL store with an existing pool
+func NewStoreWithPool(pool *pgxpool.Pool) (*Store, error) {
+	if pool == nil {
+		return nil, fmt.Errorf("database pool cannot be nil")
+	}
+
+	return &Store{db: pool}, nil
+}
+
 // Close closes the database connection
 func (s *Store) Close() error {
 	if s.db != nil {
