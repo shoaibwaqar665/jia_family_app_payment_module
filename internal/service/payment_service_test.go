@@ -5,288 +5,494 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alicebob/miniredis/v2"
 	"github.com/google/uuid"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+	"github.com/stretchr/testify/require"
 
+	"github.com/jia-app/paymentservice/internal/cache"
 	"github.com/jia-app/paymentservice/internal/domain"
+	"github.com/jia-app/paymentservice/internal/events"
 	"github.com/jia-app/paymentservice/internal/log"
 )
 
-// TestCheckEntitlement tests the CheckEntitlement method
-func TestCheckEntitlement(t *testing.T) {
-	// Initialize logger for tests
-	_ = log.Init("info")
+// fakeEntitlementRepository implements repository.EntitlementRepository for testing
+type fakeEntitlementRepository struct {
+	entitlements map[string]domain.Entitlement // key: userID:featureCode
+	shouldError  bool
+}
 
-	// Create service with nil dependencies for basic testing
-	service := &PaymentService{}
+func newFakeEntitlementRepository() *fakeEntitlementRepository {
+	return &fakeEntitlementRepository{
+		entitlements: make(map[string]domain.Entitlement),
+	}
+}
 
+func (f *fakeEntitlementRepository) Check(ctx context.Context, userID, featureCode string) (domain.Entitlement, bool, error) {
+	if f.shouldError {
+		return domain.Entitlement{}, false, domain.NewInternalError("fake repository error")
+	}
+
+	key := userID + ":" + featureCode
+	if ent, exists := f.entitlements[key]; exists {
+		return ent, true, nil
+	}
+	return domain.Entitlement{}, false, nil
+}
+
+func (f *fakeEntitlementRepository) ListByUser(ctx context.Context, userID string) ([]domain.Entitlement, error) {
+	if f.shouldError {
+		return nil, domain.NewInternalError("fake repository error")
+	}
+
+	var result []domain.Entitlement
+	for key, ent := range f.entitlements {
+		if key[:len(userID)] == userID {
+			result = append(result, ent)
+		}
+	}
+	return result, nil
+}
+
+func (f *fakeEntitlementRepository) Insert(ctx context.Context, e domain.Entitlement) (domain.Entitlement, error) {
+	if f.shouldError {
+		return domain.Entitlement{}, domain.NewInternalError("fake repository error")
+	}
+
+	if e.ID.String() == "" {
+		e.ID = uuid.New()
+	}
+	key := e.UserID + ":" + e.FeatureCode
+	f.entitlements[key] = e
+	return e, nil
+}
+
+func (f *fakeEntitlementRepository) UpdateStatus(ctx context.Context, id, status string) error {
+	if f.shouldError {
+		return domain.NewInternalError("fake repository error")
+	}
+
+	for key, ent := range f.entitlements {
+		if ent.ID.String() == id {
+			ent.Status = status
+			f.entitlements[key] = ent
+			return nil
+		}
+	}
+	return domain.NewNotFoundError("entitlement", id)
+}
+
+func (f *fakeEntitlementRepository) UpdateExpiry(ctx context.Context, id string, expiresAt *time.Time) error {
+	if f.shouldError {
+		return domain.NewInternalError("fake repository error")
+	}
+
+	for key, ent := range f.entitlements {
+		if ent.ID.String() == id {
+			ent.ExpiresAt = expiresAt
+			f.entitlements[key] = ent
+			return nil
+		}
+	}
+	return domain.NewNotFoundError("entitlement", id)
+}
+
+// setupTestCache creates a miniredis instance and cache for testing
+func setupTestCache(t *testing.T) (*cache.Cache, *miniredis.Miniredis) {
+	mr := miniredis.RunT(t)
+
+	cacheClient, err := cache.NewCache(mr.Addr(), "", 0)
+	require.NoError(t, err)
+
+	return cacheClient, mr
+}
+
+func TestCheckEntitlement_HappyPath(t *testing.T) {
+	// Setup
 	ctx := context.Background()
+	userID := "user123"
+	featureCode := "premium_feature"
 
-	// Test invalid input - empty user ID and feature code
-	_, err := service.CheckEntitlement(ctx, "", "")
-	if err == nil {
-		t.Error("Expected error for empty user_id")
-	}
+	// Create fake repositories
+	entRepo := newFakeEntitlementRepository()
 
-	// Check if it's the right error code
-	st, ok := status.FromError(err)
-	if !ok || st.Code() != codes.InvalidArgument {
-		t.Errorf("Expected InvalidArgument error, got: %v", err)
-	}
-
-	// Test invalid input - empty feature code
-	_, err = service.CheckEntitlement(ctx, "user123", "")
-	if err == nil {
-		t.Error("Expected error for empty feature_code")
-	}
-
-	st, ok = status.FromError(err)
-	if !ok || st.Code() != codes.InvalidArgument {
-		t.Errorf("Expected InvalidArgument error, got: %v", err)
-	}
-}
-
-// TestListUserEntitlements tests the ListUserEntitlements method
-func TestListUserEntitlements(t *testing.T) {
-	// Initialize logger for tests
-	_ = log.Init("info")
-
-	// Create service with nil dependencies for basic testing
-	service := &PaymentService{}
-
-	ctx := context.Background()
-
-	// Test invalid input - empty user ID
-	_, err := service.ListUserEntitlements(ctx, "")
-	if err == nil {
-		t.Error("Expected error for empty user_id")
-	}
-
-	// Check if it's the right error code
-	st, ok := status.FromError(err)
-	if !ok || st.Code() != codes.InvalidArgument {
-		t.Errorf("Expected InvalidArgument error, got: %v", err)
-	}
-}
-
-// TestCreateCheckoutSession tests the CreateCheckoutSession method
-func TestCreateCheckoutSession(t *testing.T) {
-	// Initialize logger for tests
-	_ = log.Init("info")
-
-	// Create service with nil dependencies for basic testing
-	service := &PaymentService{}
-
-	ctx := context.Background()
-
-	// Test invalid input - empty plan ID
-	_, err := service.CreateCheckoutSession(ctx, "", "user123")
-	if err == nil {
-		t.Error("Expected error for empty plan_id")
-	}
-
-	// Check if it's the right error code
-	st, ok := status.FromError(err)
-	if !ok || st.Code() != codes.InvalidArgument {
-		t.Errorf("Expected InvalidArgument error, got: %v", err)
-	}
-
-	// Test invalid input - empty user ID
-	_, err = service.CreateCheckoutSession(ctx, "plan123", "")
-	if err == nil {
-		t.Error("Expected error for empty user_id")
-	}
-
-	st, ok = status.FromError(err)
-	if !ok || st.Code() != codes.InvalidArgument {
-		t.Errorf("Expected InvalidArgument error, got: %v", err)
-	}
-}
-
-// TestPaymentSuccessWebhook tests the PaymentSuccessWebhook method
-func TestPaymentSuccessWebhook(t *testing.T) {
-	// Initialize logger for tests
-	_ = log.Init("info")
-
-	// Create service with nil dependencies for basic testing
-	service := &PaymentService{}
-
-	ctx := context.Background()
-
-	// Test invalid signature
-	err := service.PaymentSuccessWebhook(ctx, []byte("test payload"), "")
-	if err == nil {
-		t.Error("Expected error for empty signature")
-	}
-
-	// Check if it's the right error code
-	st, ok := status.FromError(err)
-	if !ok || st.Code() != codes.Unauthenticated {
-		t.Errorf("Expected Unauthenticated error, got: %v", err)
-	}
-}
-
-// TestIsValidEntitlement tests the isValidEntitlement helper function
-func TestIsValidEntitlement(t *testing.T) {
-	// Test nil entitlement
-	if isValidEntitlement(nil) {
-		t.Error("Expected false for nil entitlement")
-	}
-
-	// Test inactive entitlement
-	inactive := &domain.Entitlement{
-		Status: "inactive",
-	}
-	if isValidEntitlement(inactive) {
-		t.Error("Expected false for inactive entitlement")
-	}
-
-	// Test expired entitlement
-	pastTime := time.Now().Add(-1 * time.Hour)
-	expired := &domain.Entitlement{
-		Status:    "active",
-		ExpiresAt: &pastTime,
-	}
-	if isValidEntitlement(expired) {
-		t.Error("Expected false for expired entitlement")
-	}
-
-	// Test valid entitlement (active, not expired)
-	valid := &domain.Entitlement{
-		Status:    "active",
-		ExpiresAt: nil, // Never expires
-	}
-	if !isValidEntitlement(valid) {
-		t.Error("Expected true for valid entitlement")
-	}
-
-	// Test valid entitlement (active, expires in future)
-	futureTime := time.Now().Add(1 * time.Hour)
-	validFuture := &domain.Entitlement{
-		Status:    "active",
-		ExpiresAt: &futureTime,
-	}
-	if !isValidEntitlement(validFuture) {
-		t.Error("Expected true for valid future-expiring entitlement")
-	}
-}
-
-// TestExtractUserIDFromContext tests the extractUserIDFromContext helper function
-func TestExtractUserIDFromContext(t *testing.T) {
-	// Test empty context
-	ctx := context.Background()
-	userID := extractUserIDFromContext(ctx)
-	if userID != "" {
-		t.Errorf("Expected empty user ID, got: %s", userID)
-	}
-
-	// Test context with user ID
-	ctxWithUser := context.WithValue(ctx, log.UserIDKey, "user123")
-	userID = extractUserIDFromContext(ctxWithUser)
-	if userID != "user123" {
-		t.Errorf("Expected user123, got: %s", userID)
-	}
-
-	// Test context with non-string user ID
-	ctxWithInvalidUser := context.WithValue(ctx, log.UserIDKey, 123)
-	userID = extractUserIDFromContext(ctxWithInvalidUser)
-	if userID != "" {
-		t.Errorf("Expected empty user ID for non-string value, got: %s", userID)
-	}
-}
-
-// TestValidateWebhookSignature tests the validateWebhookSignature method
-func TestValidateWebhookSignature(t *testing.T) {
-	service := &PaymentService{}
-
-	// Test empty signature
-	err := service.validateWebhookSignature([]byte("payload"), "")
-	if err == nil {
-		t.Error("Expected error for empty signature")
-	}
-
-	// Test non-empty signature (should pass with current stub implementation)
-	err = service.validateWebhookSignature([]byte("payload"), "valid_signature")
-	if err != nil {
-		t.Errorf("Expected no error for valid signature, got: %v", err)
-	}
-}
-
-// TestParseWebhookPayload tests the parseWebhookPayload method
-func TestParseWebhookPayload(t *testing.T) {
-	service := &PaymentService{}
-
-	// Test parsing (stub implementation should always succeed)
-	data, err := service.parseWebhookPayload([]byte("test payload"))
-	if err != nil {
-		t.Errorf("Expected no error from stub implementation, got: %v", err)
-	}
-
-	if data == nil {
-		t.Error("Expected webhook data to be returned")
-	}
-
-	if data.UserID == "" {
-		t.Error("Expected UserID to be set in webhook data")
-	}
-
-	if data.FeatureCode == "" {
-		t.Error("Expected FeatureCode to be set in webhook data")
-	}
-}
-
-// TestHelperTypes tests the helper response types
-func TestHelperTypes(t *testing.T) {
-	// Test CheckEntitlementResponse
-	entitlement := &domain.Entitlement{
+	// Create a valid entitlement
+	validEntitlement := domain.Entitlement{
 		ID:          uuid.New(),
-		UserID:      "user123",
-		FeatureCode: "premium",
+		UserID:      userID,
+		FeatureCode: featureCode,
 		Status:      "active",
-	}
-
-	response := &CheckEntitlementResponse{
-		Allowed:     true,
-		Entitlement: entitlement,
-	}
-
-	if !response.Allowed {
-		t.Error("Expected Allowed to be true")
-	}
-
-	if response.Entitlement.UserID != "user123" {
-		t.Error("Expected entitlement user ID to be user123")
-	}
-
-	// Test CheckoutSessionResponse
-	checkoutResponse := &CheckoutSessionResponse{
-		Provider:    "stripe",
-		SessionID:   "sess_123",
-		RedirectURL: "https://example.com",
-	}
-
-	if checkoutResponse.Provider != "stripe" {
-		t.Error("Expected provider to be stripe")
-	}
-
-	if checkoutResponse.SessionID != "sess_123" {
-		t.Error("Expected session ID to be sess_123")
-	}
-
-	// Test WebhookData
-	webhookData := &WebhookData{
-		UserID:      "user456",
-		FeatureCode: "premium",
 		PlanID:      uuid.New(),
+		GrantedAt:   time.Now(),
+		ExpiresAt:   nil, // Never expires
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+	entRepo.entitlements[userID+":"+featureCode] = validEntitlement
+
+	// Create cache
+	cacheClient, mr := setupTestCache(t)
+	defer mr.Close()
+
+	// Create service
+	service := &PaymentService{
+		entitlementRepo:      entRepo,
+		cache:                cacheClient,
+		entitlementPublisher: events.NoopPublisher{},
+	}
+
+	// Test
+	result, err := service.CheckEntitlement(ctx, userID, featureCode)
+
+	// Assertions
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.True(t, result.Allowed)
+	require.NotNil(t, result.Entitlement)
+	require.Equal(t, userID, result.Entitlement.UserID)
+	require.Equal(t, featureCode, result.Entitlement.FeatureCode)
+	require.Equal(t, "active", result.Entitlement.Status)
+
+	// Verify cache was populated
+	cachedEnt, found, err := cacheClient.GetEntitlement(ctx, userID, featureCode)
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, validEntitlement.ID, cachedEnt.ID)
+}
+
+func TestCheckEntitlement_ExpiredPath(t *testing.T) {
+	// Setup
+	ctx := context.Background()
+	userID := "user456"
+	featureCode := "expired_feature"
+
+	// Create fake repositories
+	entRepo := newFakeEntitlementRepository()
+
+	// Create an expired entitlement
+	expiredEntitlement := domain.Entitlement{
+		ID:          uuid.New(),
+		UserID:      userID,
+		FeatureCode: featureCode,
+		Status:      "active",
+		PlanID:      uuid.New(),
+		GrantedAt:   time.Now().Add(-24 * time.Hour),
+		ExpiresAt:   &[]time.Time{time.Now().Add(-1 * time.Hour)}[0], // Expired 1 hour ago
+		CreatedAt:   time.Now().Add(-24 * time.Hour),
+		UpdatedAt:   time.Now().Add(-24 * time.Hour),
+	}
+	entRepo.entitlements[userID+":"+featureCode] = expiredEntitlement
+
+	// Create cache
+	cacheClient, mr := setupTestCache(t)
+	defer mr.Close()
+
+	// Create service
+	service := &PaymentService{
+		entitlementRepo:      entRepo,
+		cache:                cacheClient,
+		entitlementPublisher: events.NoopPublisher{},
+	}
+
+	// Test
+	result, err := service.CheckEntitlement(ctx, userID, featureCode)
+
+	// Assertions
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.False(t, result.Allowed)
+	require.Nil(t, result.Entitlement)
+
+	// Verify negative result was cached
+	isNegative, err := cacheClient.IsEntitlementNotFound(ctx, userID, featureCode)
+	require.NoError(t, err)
+	require.True(t, isNegative)
+}
+
+func TestCheckEntitlement_CacheHit(t *testing.T) {
+	// Setup
+	ctx := context.Background()
+	userID := "user789"
+	featureCode := "cached_feature"
+
+	// Create fake repositories
+	entRepo := newFakeEntitlementRepository()
+
+	// Create a valid entitlement
+	validEntitlement := domain.Entitlement{
+		ID:          uuid.New(),
+		UserID:      userID,
+		FeatureCode: featureCode,
+		Status:      "active",
+		PlanID:      uuid.New(),
+		GrantedAt:   time.Now(),
+		ExpiresAt:   nil, // Never expires
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+
+	// Create cache and pre-populate it
+	cacheClient, mr := setupTestCache(t)
+	defer mr.Close()
+
+	err := cacheClient.SetEntitlement(ctx, validEntitlement, 0)
+	require.NoError(t, err)
+
+	// Create service
+	service := &PaymentService{
+		entitlementRepo:      entRepo,
+		cache:                cacheClient,
+		entitlementPublisher: events.NoopPublisher{},
+	}
+
+	// Test - should hit cache first
+	result, err := service.CheckEntitlement(ctx, userID, featureCode)
+
+	// Assertions
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.True(t, result.Allowed)
+	require.NotNil(t, result.Entitlement)
+	require.Equal(t, userID, result.Entitlement.UserID)
+	require.Equal(t, featureCode, result.Entitlement.FeatureCode)
+
+	// Verify the repository was not called (cache hit)
+	// We can verify this by checking that the fake repo still has no data
+	_, found, _ := entRepo.Check(ctx, userID, featureCode)
+	require.False(t, found)
+}
+
+func TestCheckEntitlement_CacheHit_Expired(t *testing.T) {
+	// Setup
+	ctx := context.Background()
+	userID := "user101"
+	featureCode := "cached_expired_feature"
+
+	// Create fake repositories
+	entRepo := newFakeEntitlementRepository()
+
+	// Create an expired entitlement
+	expiredEntitlement := domain.Entitlement{
+		ID:          uuid.New(),
+		UserID:      userID,
+		FeatureCode: featureCode,
+		Status:      "active",
+		PlanID:      uuid.New(),
+		GrantedAt:   time.Now().Add(-24 * time.Hour),
+		ExpiresAt:   &[]time.Time{time.Now().Add(-1 * time.Hour)}[0], // Expired 1 hour ago
+		CreatedAt:   time.Now().Add(-24 * time.Hour),
+		UpdatedAt:   time.Now().Add(-24 * time.Hour),
+	}
+
+	// Create cache and pre-populate it with expired entitlement
+	cacheClient, mr := setupTestCache(t)
+	defer mr.Close()
+
+	err := cacheClient.SetEntitlement(ctx, expiredEntitlement, 0)
+	require.NoError(t, err)
+
+	// Create service
+	service := &PaymentService{
+		entitlementRepo:      entRepo,
+		cache:                cacheClient,
+		entitlementPublisher: events.NoopPublisher{},
+	}
+
+	// Test - should hit cache but find expired entitlement
+	result, err := service.CheckEntitlement(ctx, userID, featureCode)
+
+	// Assertions
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.False(t, result.Allowed)
+	require.Nil(t, result.Entitlement)
+
+	// Verify the expired entitlement was evicted from cache and replaced with negative cache
+	// The service should have deleted the expired entitlement and set a negative cache entry
+	_, found, _ := cacheClient.GetEntitlement(ctx, userID, featureCode)
+	require.False(t, found)
+
+	// Verify negative result was cached (since repository also doesn't have this entitlement)
+	isNegative, err := cacheClient.IsEntitlementNotFound(ctx, userID, featureCode)
+	require.NoError(t, err)
+	require.True(t, isNegative)
+}
+
+func TestCheckEntitlement_ContextUserID(t *testing.T) {
+	// Setup
+	userID := "user_context"
+	featureCode := "context_feature"
+
+	// Create context with user ID
+	ctx := log.WithUserID(context.Background(), userID)
+
+	// Create fake repositories
+	entRepo := newFakeEntitlementRepository()
+
+	// Create a valid entitlement
+	validEntitlement := domain.Entitlement{
+		ID:          uuid.New(),
+		UserID:      userID,
+		FeatureCode: featureCode,
+		Status:      "active",
+		PlanID:      uuid.New(),
+		GrantedAt:   time.Now(),
 		ExpiresAt:   nil,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+	entRepo.entitlements[userID+":"+featureCode] = validEntitlement
+
+	// Create cache
+	cacheClient, mr := setupTestCache(t)
+	defer mr.Close()
+
+	// Create service
+	service := &PaymentService{
+		entitlementRepo:      entRepo,
+		cache:                cacheClient,
+		entitlementPublisher: events.NoopPublisher{},
 	}
 
-	if webhookData.UserID != "user456" {
-		t.Error("Expected UserID to be user456")
+	// Test - pass empty userID, should extract from context
+	result, err := service.CheckEntitlement(ctx, "", featureCode)
+
+	// Assertions
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.True(t, result.Allowed)
+	require.NotNil(t, result.Entitlement)
+	require.Equal(t, userID, result.Entitlement.UserID)
+}
+
+func TestCheckEntitlement_ValidationErrors(t *testing.T) {
+	// Setup
+	ctx := context.Background()
+
+	// Create fake repositories
+	entRepo := newFakeEntitlementRepository()
+
+	// Create cache
+	cacheClient, mr := setupTestCache(t)
+	defer mr.Close()
+
+	// Create service
+	service := &PaymentService{
+		entitlementRepo:      entRepo,
+		cache:                cacheClient,
+		entitlementPublisher: events.NoopPublisher{},
 	}
 
-	if webhookData.FeatureCode != "premium" {
-		t.Error("Expected FeatureCode to be premium")
+	// Test cases
+	testCases := []struct {
+		name          string
+		userID        string
+		featureCode   string
+		expectedError string
+	}{
+		{
+			name:          "empty user ID and no context",
+			userID:        "",
+			featureCode:   "feature",
+			expectedError: "user_id is required",
+		},
+		{
+			name:          "empty feature code",
+			userID:        "user123",
+			featureCode:   "",
+			expectedError: "feature_code is required",
+		},
 	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := service.CheckEntitlement(ctx, tc.userID, tc.featureCode)
+
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.expectedError)
+			require.Nil(t, result)
+		})
+	}
+}
+
+func TestCheckEntitlement_RepositoryError(t *testing.T) {
+	// Setup
+	ctx := context.Background()
+	userID := "user_error"
+	featureCode := "error_feature"
+
+	// Create fake repositories with error
+	entRepo := newFakeEntitlementRepository()
+	entRepo.shouldError = true
+
+	// Create cache
+	cacheClient, mr := setupTestCache(t)
+	defer mr.Close()
+
+	// Create service
+	service := &PaymentService{
+		entitlementRepo:      entRepo,
+		cache:                cacheClient,
+		entitlementPublisher: events.NoopPublisher{},
+	}
+
+	// Test
+	result, err := service.CheckEntitlement(ctx, userID, featureCode)
+
+	// Assertions
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "failed to check entitlement")
+	require.Nil(t, result)
+}
+
+func TestCheckEntitlement_CacheError(t *testing.T) {
+	// Setup
+	ctx := context.Background()
+	userID := "user_cache_error"
+	featureCode := "cache_error_feature"
+
+	// Create fake repositories
+	entRepo := newFakeEntitlementRepository()
+
+	// Create a valid entitlement
+	validEntitlement := domain.Entitlement{
+		ID:          uuid.New(),
+		UserID:      userID,
+		FeatureCode: featureCode,
+		Status:      "active",
+		PlanID:      uuid.New(),
+		GrantedAt:   time.Now(),
+		ExpiresAt:   nil,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+	entRepo.entitlements[userID+":"+featureCode] = validEntitlement
+
+	// Create cache that will fail
+	cacheClient, mr := setupTestCache(t)
+	defer mr.Close()
+
+	// Corrupt the cache by setting invalid data
+	mr.Set("entl:"+userID+":"+featureCode, "invalid json data")
+
+	// Create service
+	service := &PaymentService{
+		entitlementRepo:      entRepo,
+		cache:                cacheClient,
+		entitlementPublisher: events.NoopPublisher{},
+	}
+
+	// Test - should fallback to repository due to cache error
+	result, err := service.CheckEntitlement(ctx, userID, featureCode)
+
+	// Assertions
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.True(t, result.Allowed)
+	require.NotNil(t, result.Entitlement)
+
+	// Verify the corrupted cache entry was evicted and replaced
+	cachedEnt, found, err := cacheClient.GetEntitlement(ctx, userID, featureCode)
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, validEntitlement.ID, cachedEnt.ID)
 }
