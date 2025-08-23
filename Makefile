@@ -1,9 +1,10 @@
-.PHONY: help generate migrate-up migrate-down migrate-create migrate-force run lint
+.PHONY: help generate sqlc-validate migrate-up migrate-down migrate-create migrate-force run lint
 
 # Default target
 help:
 	@echo "Available targets:"
 	@echo "  generate     - Generate code from proto and sqlc"
+	@echo "  sqlc-validate - Validate sqlc configuration and queries"
 	@echo "  migrate-up   - Run database migrations up"
 	@echo "  migrate-down - Rollback database migrations (1 step)"
 	@echo "  migrate-create - Create a new migration file"
@@ -14,8 +15,17 @@ help:
 # Generate code from proto and sqlc
 generate:
 	@echo "Generating code..."
+	@echo "Generating SQL code with sqlc..."
+	@docker run --rm -v $(PWD):/src -w /src kjconroy/sqlc:latest generate -f sqlc.yaml
+	@echo "Generating Go code with go generate..."
 	@go generate ./...
 	@echo "Code generation complete"
+
+# Validate sqlc configuration and queries
+sqlc-validate:
+	@echo "Validating sqlc configuration..."
+	@docker run --rm -v $(PWD):/src -w /src kjconroy/sqlc:latest validate -f sqlc.yaml
+	@echo "Validation complete"
 
 # Run database migrations up
 migrate-up:
