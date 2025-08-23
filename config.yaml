@@ -1,19 +1,28 @@
-server:
-  port: 50051
+app_name: "payment-service"
 
-database:
-  host: localhost
-  port: 5432
-  user: paymentservice
-  password: paymentservice123
-  dbname: paymentservice
-  sslmode: disable
+grpc:
+  address: ":8081"
+
+postgres:
+  dsn: "host=localhost port=5432 user=paymentservice password=paymentservice123 dbname=paymentservice sslmode=disable"
+  max_conns: 10
 
 redis:
-  host: localhost
-  port: 6379
-  password: ""
+  addr: "localhost:6379"
   db: 0
+  password: ""
+
+auth:
+  public_key_pem: ""
+
+billing:
+  provider: "stripe"
+  stripe_secret: ""
+
+events:
+  provider: "kafka"
+  brokers: ["localhost:9092"]
+  topic: "payments"
 
 log:
-  level: info
+  level: "info"
