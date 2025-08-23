@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/jia-app/paymentservice/internal/domain"
 )
 
 // Cache represents a Redis cache implementation
@@ -108,4 +109,104 @@ func (c *Cache) Incr(ctx context.Context, key string) (int64, error) {
 // Expire sets the expiration time for a key
 func (c *Cache) Expire(ctx context.Context, key string, expiration time.Duration) error {
 	return c.client.Expire(ctx, key, expiration).Err()
+}
+
+// GetEntitlement retrieves an entitlement from cache
+func (c *Cache) GetEntitlement(ctx context.Context, userID, featureCode string) (*domain.Entitlement, bool, error) {
+	key := fmt.Sprintf("entl:%s:%s", userID, featureCode)
+	
+	data, err := c.client.Get(ctx, key).Bytes()
+	if err != nil {
+		if err == redis.Nil {
+			// Cache miss - not found
+			return nil, false, nil
+		}
+		return nil, false, fmt.Errorf("failed to get entitlement from cache: %w", err)
+	}
+	
+	var entitlement domain.Entitlement
+	if err := json.Unmarshal(data, &entitlement); err != nil {
+		return nil, false, fmt.Errorf("failed to unmarshal entitlement: %w", err)
+	}
+	
+	return &entitlement, true, nil
+}
+
+// SetEntitlement stores an entitlement in cache
+func (c *Cache) SetEntitlement(ctx context.Context, ent domain.Entitlement, ttl time.Duration) error {
+	key := fmt.Sprintf("entl:%s:%s", ent.UserID, ent.FeatureCode)
+	
+	// Default TTL to 2 minutes if not specified
+	if ttl <= 0 {
+		ttl = 2 * time.Minute
+	}
+	
+	data, err := json.Marshal(ent)
+	if err != nil {
+		return fmt.Errorf("failed to marshal entitlement: %w", err)
+	}
+	
+	if err := c.client.Set(ctx, key, data, ttl).Err(); err != nil {
+		return fmt.Errorf("failed to set entitlement in cache: %w", err)
+	}
+	
+	return nil
+}
+
+// SetEntitlementNotFound caches a negative result for an entitlement
+// Uses a shorter TTL (10 seconds max) to avoid caching stale negative results
+func (c *Cache) SetEntitlementNotFound(ctx context.Context, userID, featureCode string) error {
+	key := fmt.Sprintf("entl:%s:%s", userID, featureCode)
+	
+	// Cache negative result for 10 seconds maximum
+	ttl := 10 * time.Second
+	
+	// Use a special marker for negative results
+	negativeResult := map[string]interface{}{
+		"not_found": true,
+		"cached_at": time.Now().Unix(),
+	}
+	
+	data, err := json.Marshal(negativeResult)
+	if err != nil {
+		return fmt.Errorf("failed to marshal negative result: %w", err)
+	}
+	
+	if err := c.client.Set(ctx, key, data, ttl).Err(); err != nil {
+		return fmt.Errorf("failed to set negative result in cache: %w", err)
+	}
+	
+	return nil
+}
+
+// IsEntitlementNotFound checks if the cached value represents a negative result
+func (c *Cache) IsEntitlementNotFound(ctx context.Context, userID, featureCode string) (bool, error) {
+	key := fmt.Sprintf("entl:%s:%s", userID, featureCode)
+	
+	data, err := c.client.Get(ctx, key).Bytes()
+	if err != nil {
+		if err == redis.Nil {
+			return false, nil // No cache entry
+		}
+		return false, fmt.Errorf("failed to check negative cache: %w", err)
+	}
+	
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		// If unmarshaling fails, it might be a valid entitlement, not a negative result
+		return false, nil
+	}
+	
+	// Check if this is a negative result marker
+	if notFound, ok := result["not_found"].(bool); ok && notFound {
+		return true, nil
+	}
+	
+	return false, nil
+}
+
+// DeleteEntitlement removes an entitlement from cache
+func (c *Cache) DeleteEntitlement(ctx context.Context, userID, featureCode string) error {
+	key := fmt.Sprintf("entl:%s:%s", userID, featureCode)
+	return c.client.Del(ctx, key).Err()
 }

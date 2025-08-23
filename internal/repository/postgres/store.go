@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jia-app/paymentservice/internal/domain"
@@ -21,17 +22,17 @@ func NewStore(connString string) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse connection string: %w", err)
 	}
-	
+
 	pool, err := pgxpool.NewWithConfig(context.Background(), config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create connection pool: %w", err)
 	}
-	
+
 	// Test the connection
 	if err := pool.Ping(context.Background()); err != nil {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
-	
+
 	return &Store{db: pool}, nil
 }
 
@@ -47,6 +48,16 @@ func (s *Store) Close() error {
 func (s *Store) Payment() repository.PaymentRepository {
 	// TODO: Return actual implementation
 	return &paymentRepository{store: s}
+}
+
+// Plan returns the plan repository implementation
+func (s *Store) Plan() repository.PlanRepository {
+	return &planRepository{store: s}
+}
+
+// Entitlement returns the entitlement repository implementation
+func (s *Store) Entitlement() repository.EntitlementRepository {
+	return &entitlementRepository{store: s}
 }
 
 // paymentRepository implements repository.PaymentRepository
@@ -106,4 +117,56 @@ func (r *paymentRepository) List(ctx context.Context, limit, offset int) ([]*dom
 func (r *paymentRepository) Count(ctx context.Context) (int64, error) {
 	// TODO: Implement with sqlc generated queries
 	return 0, fmt.Errorf("not implemented")
+}
+
+// planRepository implements repository.PlanRepository
+type planRepository struct {
+	store *Store
+}
+
+// GetByID retrieves a plan by ID
+func (r *planRepository) GetByID(ctx context.Context, id string) (domain.Plan, error) {
+	// TODO: Implement with sqlc generated queries
+	return domain.Plan{}, fmt.Errorf("not implemented")
+}
+
+// ListActive retrieves all active plans
+func (r *planRepository) ListActive(ctx context.Context) ([]domain.Plan, error) {
+	// TODO: Implement with sqlc generated queries
+	return nil, fmt.Errorf("not implemented")
+}
+
+// entitlementRepository implements repository.EntitlementRepository
+type entitlementRepository struct {
+	store *Store
+}
+
+// Check checks if a user has an active entitlement for a feature
+func (r *entitlementRepository) Check(ctx context.Context, userID, featureCode string) (domain.Entitlement, bool, error) {
+	// TODO: Implement with sqlc generated queries
+	return domain.Entitlement{}, false, fmt.Errorf("not implemented")
+}
+
+// ListByUser retrieves all entitlements for a user
+func (r *entitlementRepository) ListByUser(ctx context.Context, userID string) ([]domain.Entitlement, error) {
+	// TODO: Implement with sqlc generated queries
+	return nil, fmt.Errorf("not implemented")
+}
+
+// Insert creates a new entitlement
+func (r *entitlementRepository) Insert(ctx context.Context, e domain.Entitlement) (domain.Entitlement, error) {
+	// TODO: Implement with sqlc generated queries
+	return domain.Entitlement{}, fmt.Errorf("not implemented")
+}
+
+// UpdateStatus updates the status of an entitlement
+func (r *entitlementRepository) UpdateStatus(ctx context.Context, id, status string) error {
+	// TODO: Implement with sqlc generated queries
+	return fmt.Errorf("not implemented")
+}
+
+// UpdateExpiry updates the expiry time of an entitlement
+func (r *entitlementRepository) UpdateExpiry(ctx context.Context, id string, expiresAt *time.Time) error {
+	// TODO: Implement with sqlc generated queries
+	return fmt.Errorf("not implemented")
 }
