@@ -39,39 +39,39 @@ generate:
 		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
 		proto/payment/v1/payment_service.proto
 	@echo "Generating SQL code with sqlc..."
-	@docker run --rm -v $(PWD):/src -w /src kjconroy/sqlc:latest generate -f sqlc.yaml
+	@docker-compose run --rm sqlc generate -f sqlc.yaml
 	@echo "Code generation complete"
 
 # Validate sqlc configuration and queries
 sqlc-validate:
 	@echo "Validating sqlc configuration..."
-	@docker run --rm -v $(PWD):/src -w /src kjconroy/sqlc:latest validate -f sqlc.yaml
+	@docker-compose run --rm sqlc validate -f sqlc.yaml
 	@echo "Validation complete"
 
 # Run database migrations up
 migrate-up:
 	@echo "Running migrations up..."
 	@POSTGRES_DSN="$${POSTGRES_DSN:-postgres://app:app@localhost:5432/payments?sslmode=disable}" \
-	docker compose run --rm migrate -path=/migrations -database "$$POSTGRES_DSN" up
+	docker-compose run --rm migrate -path=/migrations -database "$$POSTGRES_DSN" up
 	@echo "Migrations completed"
 
 # Rollback database migrations (rollback 1 step)
 migrate-down:
 	@echo "Rolling back migrations..."
 	@POSTGRES_DSN="$${POSTGRES_DSN:-postgres://app:app@localhost:5432/payments?sslmode=disable}" \
-	docker compose run --rm migrate -path=/migrations -database "$$POSTGRES_DSN" down 1
+	docker-compose run --rm migrate -path=/migrations -database "$$POSTGRES_DSN" down 1
 	@echo "Migrations rolled back"
 
 # Create a new migration file
 migrate-create:
 	@read -p "Enter migration name: " name; \
-	docker compose run --rm migrate create -ext sql -dir /migrations -seq $$name
+	docker-compose run --rm migrate create -ext sql -dir /migrations -seq $$name
 
 # Force migration version (use with caution)
 migrate-force:
 	@read -p "Enter version to force: " version; \
 	@POSTGRES_DSN="$${POSTGRES_DSN:-postgres://app:app@localhost:5432/payments?sslmode=disable}" \
-	docker compose run --rm migrate -path=/migrations -database "$$POSTGRES_DSN" force $$version
+	docker-compose run --rm migrate -path=/migrations -database "$$POSTGRES_DSN" force $$version
 
 # Run the payment service
 run:

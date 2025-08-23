@@ -44,8 +44,9 @@ type AuthConfig struct {
 
 // BillingConfig holds billing provider configuration
 type BillingConfig struct {
-	Provider     string `mapstructure:"provider"`
-	StripeSecret string `mapstructure:"stripe_secret"`
+	Provider          string `mapstructure:"provider"`
+	StripeSecret      string `mapstructure:"stripe_secret"`
+	StripePublishable string `mapstructure:"stripe_publishable"`
 }
 
 // EventsConfig holds event streaming configuration
@@ -117,6 +118,7 @@ func setDefaults() {
 	viper.SetDefault("redis.db", 0)
 	viper.SetDefault("auth.public_key_pem", "")
 	viper.SetDefault("billing.provider", "stripe")
+	viper.SetDefault("billing.stripe_publishable", "")
 	viper.SetDefault("events.provider", "kafka")
 	viper.SetDefault("events.topic", "payments")
 	viper.SetDefault("log.level", "info")
