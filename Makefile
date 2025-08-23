@@ -1,3 +1,22 @@
+# Payment Service Makefile
+# 
+# Environment Variables:
+#   POSTGRES_DSN - PostgreSQL connection string (default: postgres://paymentservice:paymentservice123@localhost:5432/paymentservice?sslmode=disable)
+#   REDIS_ADDR   - Redis address (default: localhost:6379)
+#   GRPC_ADDR    - gRPC server address (default: :8081)
+#   ENV          - Environment (dev, test, prod)
+#
+# Examples:
+#   export POSTGRES_DSN="postgres://user:pass@localhost:5432/db?sslmode=disable"
+#   export REDIS_ADDR="localhost:6379"
+#   export GRPC_ADDR=":8081"
+#   export ENV="dev"
+#
+#   make run                    # Run with default config
+#   make run POSTGRES_DSN="..." # Run with custom DB
+#   make migrate-up             # Run migrations with POSTGRES_DSN
+#   make generate               # Generate proto and sqlc code
+
 .PHONY: help generate sqlc-validate migrate-up migrate-down migrate-create migrate-force run lint
 
 # Default target
@@ -10,15 +29,17 @@ help:
 	@echo "  migrate-create - Create a new migration file"
 	@echo "  migrate-force - Force migration to specific version"
 	@echo "  run          - Run the payment service"
-	@echo "  lint         - Run linter and formatter"
+	@echo "  lint         - Run linter and formatter (optional)"
 
 # Generate code from proto and sqlc
 generate:
 	@echo "Generating code..."
+	@echo "Generating Go code from proto files..."
+	@protoc --go_out=. --go_opt=paths=source_relative \
+		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
+		proto/payment/v1/payment_service.proto
 	@echo "Generating SQL code with sqlc..."
 	@docker run --rm -v $(PWD):/src -w /src kjconroy/sqlc:latest generate -f sqlc.yaml
-	@echo "Generating Go code with go generate..."
-	@go generate ./...
 	@echo "Code generation complete"
 
 # Validate sqlc configuration and queries
@@ -30,44 +51,45 @@ sqlc-validate:
 # Run database migrations up
 migrate-up:
 	@echo "Running migrations up..."
-	@docker run --rm -v $(PWD)/migrations:/migrations --network host migrate/migrate:v4 \
-		-path=/migrations \
-		-database="postgres://paymentservice:paymentservice123@localhost:5432/paymentservice?sslmode=disable" \
-		up
+	@POSTGRES_DSN="$${POSTGRES_DSN:-postgres://paymentservice:paymentservice123@localhost:5432/paymentservice?sslmode=disable}" \
+	docker compose run --rm migrate -path=/migrations -database "$$POSTGRES_DSN" up
 	@echo "Migrations completed"
 
 # Rollback database migrations (rollback 1 step)
 migrate-down:
 	@echo "Rolling back migrations..."
-	@docker run --rm -v $(PWD)/migrations:/migrations --network host migrate/migrate:v4 \
-		-path=/migrations \
-		-database="postgres://paymentservice:paymentservice123@localhost:5432/paymentservice?sslmode=disable" \
-		down 1
+	@POSTGRES_DSN="$${POSTGRES_DSN:-postgres://paymentservice:paymentservice123@localhost:5432/paymentservice?sslmode=disable}" \
+	docker compose run --rm migrate -path=/migrations -database "$$POSTGRES_DSN" down 1
 	@echo "Migrations rolled back"
 
 # Create a new migration file
 migrate-create:
 	@read -p "Enter migration name: " name; \
-	docker run --rm -v $(PWD)/migrations:/migrations migrate/migrate:v4 \
-		create -ext sql -dir /migrations -seq $$name
+	docker compose run --rm migrate create -ext sql -dir /migrations -seq $$name
 
 # Force migration version (use with caution)
 migrate-force:
 	@read -p "Enter version to force: " version; \
-	docker run --rm -v $(PWD)/migrations:/migrations --network host migrate/migrate:v4 \
-		-path=/migrations \
-		-database="postgres://paymentservice:paymentservice123@localhost:5432/paymentservice?sslmode=disable" \
-		force $$version
+	@POSTGRES_DSN="$${POSTGRES_DSN:-postgres://paymentservice:paymentservice123@localhost:5432/paymentservice?sslmode=disable}" \
+	docker compose run --rm migrate -path=/migrations -database "$$POSTGRES_DSN" force $$version
 
 # Run the payment service
 run:
 	@echo "Starting payment service..."
-	@go run cmd/paymentservice/main.go
+	@go run ./cmd/paymentservice
 
-# Run linter and formatter
+# Run linter and formatter (optional)
 lint:
 	@echo "Running linter..."
-	@golangci-lint run
+	@if command -v golangci-lint >/dev/null 2>&1; then \
+		golangci-lint run; \
+	else \
+		echo "golangci-lint not found, skipping..."; \
+	fi
 	@echo "Running formatter..."
-	@gofmt -s -w .
+	@if command -v gofmt >/dev/null 2>&1; then \
+		gofmt -s -w .; \
+	else \
+		echo "gofmt not found, skipping..."; \
+	fi
 	@echo "Linting complete"

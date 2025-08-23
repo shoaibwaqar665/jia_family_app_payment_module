@@ -3,11 +3,11 @@ package interceptors
 import (
 	"context"
 
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-	"go.uber.org/zap"
 
 	"github.com/jia-app/paymentservice/internal/auth"
 	"github.com/jia-app/paymentservice/internal/log"
@@ -40,21 +40,21 @@ func (i *AuthInterceptor) Unary() grpc.UnaryServerInterceptor {
 		if i.whitelistedMethods[info.FullMethod] {
 			return handler(ctx, req)
 		}
-		
+
 		// Authenticate the request
 		userID, err := i.authenticate(ctx)
 		if err != nil {
 			return nil, err
 		}
-		
+
 		// Inject user_id into context and add to logs
 		ctx = log.WithUserID(ctx, userID)
-		
+
 		// Log successful authentication
 		log.Info(ctx, "Request authenticated",
 			zap.String("method", info.FullMethod),
 			zap.String("user_id", userID))
-		
+
 		return handler(ctx, req)
 	}
 }
@@ -71,27 +71,27 @@ func (i *AuthInterceptor) Stream() grpc.StreamServerInterceptor {
 		if i.whitelistedMethods[info.FullMethod] {
 			return handler(srv, stream)
 		}
-		
+
 		// Authenticate the stream
 		userID, err := i.authenticate(stream.Context())
 		if err != nil {
 			return err
 		}
-		
+
 		// Create new context with user_id
 		ctx := log.WithUserID(stream.Context(), userID)
-		
+
 		// Log successful authentication
 		log.Info(ctx, "Stream authenticated",
 			zap.String("method", info.FullMethod),
 			zap.String("user_id", userID))
-		
+
 		// Wrap the stream with authenticated context
 		wrappedStream := &authenticatedServerStream{
 			ServerStream: stream,
 			ctx:          ctx,
 		}
-		
+
 		return handler(srv, wrappedStream)
 	}
 }
@@ -102,29 +102,29 @@ func (i *AuthInterceptor) authenticate(ctx context.Context) (string, error) {
 	if !ok {
 		return "", status.Errorf(codes.Unauthenticated, "metadata is not provided")
 	}
-	
+
 	// Look for authorization metadata with key "better-auth-token"
 	authTokens := md.Get("better-auth-token")
 	if len(authTokens) == 0 {
 		// Fallback to standard "authorization" header
 		authTokens = md.Get("authorization")
 	}
-	
+
 	if len(authTokens) == 0 {
 		return "", status.Errorf(codes.Unauthenticated, "authorization token is not provided")
 	}
-	
+
 	token := authTokens[0]
 	if token == "" {
 		return "", status.Errorf(codes.Unauthenticated, "invalid authorization token")
 	}
-	
+
 	// Validate token using the auth validator
 	userID, err := auth.Validate(ctx, token)
 	if err != nil {
 		return "", status.Errorf(codes.Unauthenticated, "token validation failed: %v", err)
 	}
-	
+
 	return userID, nil
 }
 

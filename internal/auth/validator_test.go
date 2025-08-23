@@ -7,7 +7,7 @@ import (
 
 func TestValidate(t *testing.T) {
 	ctx := context.Background()
-	
+
 	tests := []struct {
 		name     string
 		token    string
@@ -45,23 +45,23 @@ func TestValidate(t *testing.T) {
 			wantErr:  false,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			userID, err := Validate(ctx, tt.token)
-			
+
 			if tt.wantErr {
 				if err == nil {
 					t.Errorf("Validate() expected error but got none")
 				}
 				return
 			}
-			
+
 			if err != nil {
 				t.Errorf("Validate() unexpected error: %v", err)
 				return
 			}
-			
+
 			if userID != tt.expected {
 				t.Errorf("Validate() userID = %v, want %v", userID, tt.expected)
 			}
@@ -71,9 +71,9 @@ func TestValidate(t *testing.T) {
 
 func TestExtractTokenFromAuthHeader(t *testing.T) {
 	tests := []struct {
-		name        string
-		authHeader  string
-		expected    string
+		name       string
+		authHeader string
+		expected   string
 	}{
 		{
 			name:       "empty header",
@@ -101,7 +101,7 @@ func TestExtractTokenFromAuthHeader(t *testing.T) {
 			expected:   "spiff_id_12345",
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := ExtractTokenFromAuthHeader(tt.authHeader)
