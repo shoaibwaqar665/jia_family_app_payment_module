@@ -7,7 +7,7 @@ A Go-based microservice for handling payment processing operations with plans an
 - **gRPC API**: High-performance RPC service for payment operations
 - **PostgreSQL**: Persistent storage with migrations
 - **Redis**: Caching layer for improved performance
-- **Structured Logging**: Using Zap logger
+- **Structured Logging**: Using Zap logger with context-aware logging
 - **Configuration Management**: Using Viper
 - **Docker Support**: Containerized deployment
 - **Health Checks**: Built-in health monitoring
@@ -78,7 +78,63 @@ A Go-based microservice for handling payment processing operations with plans an
 
 ## Configuration
 
-The service can be configured via environment variables or a `config.yaml` file. See `config.yaml` for available options.
+The service can be configured via environment variables or a `config.yaml` file. The configuration supports:
+
+### Configuration Structure
+- **AppName**: Application identifier
+- **GRPC**: gRPC server address (default: `:8081`)
+- **Postgres**: Database connection string and connection pool settings
+- **Redis**: Cache server address, database number, and authentication
+- **Auth**: Authentication configuration (TODO: integrate real provider)
+- **Billing**: Billing provider settings (placeholder for Stripe integration)
+- **Events**: Event streaming configuration (Kafka, etc.)
+- **Log**: Logging level configuration
+
+### Environment Variables
+All configuration can be overridden via environment variables using dot notation:
+```bash
+export GRPC_ADDRESS=":50051"
+export POSTGRES_DSN="host=db port=5432 user=paymentservice password=secret dbname=paymentservice"
+export REDIS_ADDR="redis:6379"
+export BILLING_PROVIDER="stripe"
+export EVENTS_PROVIDER="kafka"
+```
+
+### Configuration File
+See `config.yaml` for the complete configuration structure and defaults.
+
+## Logging
+
+The service uses structured logging with Zap. The logger provides:
+
+### Context-Aware Logging
+- **Request ID**: Automatically included in all log entries within a request
+- **User ID**: Extracted from authentication context
+- **Trace ID**: For distributed tracing support
+
+### Usage Examples
+```go
+// Initialize logger
+log.Init("info")
+
+// Create context with request-scoped fields
+ctx := log.WithRequestID(context.Background(), "req_123")
+ctx = log.WithUserID(ctx, "user_456")
+
+// Log with context
+log.Info(ctx, "Processing payment", 
+    zap.String("payment_id", "pay_123"),
+    zap.Int64("amount", 1000))
+
+// Direct logger access
+log.L(ctx).Error("Payment failed", zap.Error(err))
+```
+
+### Log Levels
+- `debug`: Detailed debugging information
+- `info`: General information about service operation
+- `warn`: Warning messages for potentially harmful situations
+- `error`: Error messages for failures
 
 ## Database Schema
 
