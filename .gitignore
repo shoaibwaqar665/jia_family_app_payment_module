@@ -54,3 +54,5 @@ internal/repository/postgres/queries.sql.go
 # Docker volumes
 docker/postgres_data/
 docker/redis_data/
+
+*.env

@@ -101,6 +101,30 @@ export BILLING_PROVIDER="stripe"
 export EVENTS_PROVIDER="kafka"
 ```
 
+### Environment Setup
+1. **Copy the example environment file:**
+   ```bash
+   cp example.env .env
+   ```
+
+2. **Edit `.env` with your actual values:**
+   ```bash
+   # Database Configuration
+   POSTGRES_DSN=postgres://username:password@host:port/database?sslmode=require
+   
+   # Stripe Configuration (get these from your Stripe dashboard)
+   STRIPE_SECRET=sk_test_your_secret_key_here
+   STRIPE_PUBLISHABLE_KEY=pk_test_your_publishable_key_here
+   
+   # Other settings...
+   ```
+
+3. **Important Security Notes:**
+   - Never commit `.env` files to version control
+   - The `.env` file is already in `.gitignore`
+   - Use test keys for development, production keys for production
+   - Rotate keys regularly and monitor for unauthorized usage
+
 ### Configuration File
 See `config.yaml` for the complete configuration structure and defaults.
 

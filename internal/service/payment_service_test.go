@@ -307,7 +307,7 @@ func TestCheckEntitlement_CacheHit_Expired(t *testing.T) {
 	// Verify the expired entitlement was evicted from cache and replaced with negative cache
 	// The service should have deleted the expired entitlement and set a negative cache entry
 	// Note: The service sets a negative cache entry when no valid entitlement is found
-	
+
 	// Verify negative result was cached (since repository also doesn't have this entitlement)
 	isNegative, err := cacheClient.IsEntitlementNotFound(ctx, userID, featureCode)
 	require.NoError(t, err)
