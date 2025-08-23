@@ -1,7 +1,7 @@
 # Payment Service Makefile
 # 
 # Environment Variables:
-#   POSTGRES_DSN - PostgreSQL connection string (default: postgres://paymentservice:paymentservice123@localhost:5432/paymentservice?sslmode=disable)
+#   POSTGRES_DSN - PostgreSQL connection string (default: postgres://app:app@localhost:5432/payments?sslmode=disable)
 #   REDIS_ADDR   - Redis address (default: localhost:6379)
 #   GRPC_ADDR    - gRPC server address (default: :8081)
 #   ENV          - Environment (dev, test, prod)
@@ -51,14 +51,14 @@ sqlc-validate:
 # Run database migrations up
 migrate-up:
 	@echo "Running migrations up..."
-	@POSTGRES_DSN="$${POSTGRES_DSN:-postgres://paymentservice:paymentservice123@localhost:5432/paymentservice?sslmode=disable}" \
+	@POSTGRES_DSN="$${POSTGRES_DSN:-postgres://app:app@localhost:5432/payments?sslmode=disable}" \
 	docker compose run --rm migrate -path=/migrations -database "$$POSTGRES_DSN" up
 	@echo "Migrations completed"
 
 # Rollback database migrations (rollback 1 step)
 migrate-down:
 	@echo "Rolling back migrations..."
-	@POSTGRES_DSN="$${POSTGRES_DSN:-postgres://paymentservice:paymentservice123@localhost:5432/paymentservice?sslmode=disable}" \
+	@POSTGRES_DSN="$${POSTGRES_DSN:-postgres://app:app@localhost:5432/payments?sslmode=disable}" \
 	docker compose run --rm migrate -path=/migrations -database "$$POSTGRES_DSN" down 1
 	@echo "Migrations rolled back"
 
@@ -70,7 +70,7 @@ migrate-create:
 # Force migration version (use with caution)
 migrate-force:
 	@read -p "Enter version to force: " version; \
-	@POSTGRES_DSN="$${POSTGRES_DSN:-postgres://paymentservice:paymentservice123@localhost:5432/paymentservice?sslmode=disable}" \
+	@POSTGRES_DSN="$${POSTGRES_DSN:-postgres://app:app@localhost:5432/payments?sslmode=disable}" \
 	docker compose run --rm migrate -path=/migrations -database "$$POSTGRES_DSN" force $$version
 
 # Run the payment service

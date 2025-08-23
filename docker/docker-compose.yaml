@@ -3,20 +3,19 @@ version: '3.8'
 services:
   # PostgreSQL database
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16
     container_name: paymentservice_postgres
     environment:
-      POSTGRES_DB: paymentservice
-      POSTGRES_USER: paymentservice
-      POSTGRES_PASSWORD: paymentservice123
+      POSTGRES_DB: payments
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
       POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./../migrations:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U paymentservice -d paymentservice"]
+      test: ["CMD-SHELL", "pg_isready -U app -d payments"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -25,7 +24,7 @@ services:
 
   # Redis cache
   redis:
-    image: redis:7-alpine
+    image: redis:7
     container_name: paymentservice_redis
     ports:
       - "6379:6379"
@@ -44,7 +43,6 @@ services:
   migrate:
     image: migrate/migrate:v4
     container_name: paymentservice_migrate
-    command: ["-path", "/migrations", "-database", "postgres://paymentservice:paymentservice123@postgres:5432/paymentservice?sslmode=disable", "up"]
     volumes:
       - ./../migrations:/migrations
     depends_on:
@@ -66,9 +64,9 @@ services:
     environment:
       - DB_HOST=postgres
       - DB_PORT=5432
-      - DB_USER=paymentservice
-      - DB_PASSWORD=paymentservice123
-      - DB_NAME=paymentservice
+      - DB_USER=app
+      - DB_PASSWORD=app
+      - DB_NAME=payments
       - DB_SSLMODE=disable
       - REDIS_HOST=redis
       - REDIS_PORT=6379
