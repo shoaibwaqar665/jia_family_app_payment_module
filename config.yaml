@@ -1,28 +1,28 @@
-app_name: "payment-service"
+app_name: "${APP_NAME}"
 
 grpc:
-  address: ":8081"
+  address: "${GRPC_ADDRESS}"
 
 postgres:
-  dsn: "host=localhost port=5432 user=paymentservice password=paymentservice123 dbname=paymentservice sslmode=disable"
+  dsn: "${POSTGRES_DSN}"
   max_conns: 10
 
 redis:
-  addr: "localhost:6379"
-  db: 0
-  password: ""
+  addr: "${REDIS_ADDR}"
+  db: "${REDIS_DB}"
+  password: "${REDIS_PASSWORD}"
 
 auth:
-  public_key_pem: ""
+  public_key_pem: "${AUTH_PUBLIC_KEY_PEM}"
 
 billing:
-  provider: "stripe"
-  stripe_secret: ""
+  provider: "${BILLING_PROVIDER}"
+  stripe_secret: "${STRIPE_SECRET}"
 
 events:
-  provider: "kafka"
-  brokers: ["localhost:9092"]
-  topic: "payments"
+  provider: "${EVENTS_PROVIDER}"
+  brokers: "${EVENTS_BROKERS}"
+  topic: "${EVENTS_TOPIC}"
 
 log:
-  level: "info"
+  level: "${LOG_LEVEL}"
