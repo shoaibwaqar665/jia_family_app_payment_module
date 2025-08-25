@@ -1,0 +1,187 @@
+{
+  "info": {
+    "name": "Payment Service - gRPC API",
+    "description": "Collection for testing the Payment Service gRPC API endpoints",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "localhost:8081",
+      "type": "string"
+    },
+    {
+      "key": "auth_token",
+      "value": "spiff_id_test_user_123",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/grpc"
+          }
+        ],
+        "url": {
+          "raw": "grpc://{{base_url}}/grpc.health.v1.Health/Check",
+          "protocol": "grpc",
+          "host": ["{{base_url}}"],
+          "path": ["grpc.health.v1.Health", "Check"]
+        },
+        "description": "Check the health status of the service"
+      }
+    },
+    {
+      "name": "Check Entitlement",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/grpc"
+          },
+          {
+            "key": "better-auth-token",
+            "value": "{{auth_token}}"
+          }
+        ],
+        "url": {
+          "raw": "grpc://{{base_url}}/payment.v1.PaymentService/CheckEntitlement",
+          "protocol": "grpc",
+          "host": ["{{base_url}}"],
+          "path": ["payment.v1.PaymentService", "CheckEntitlement"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"user_id\": \"user123\",\n  \"feature_code\": \"premium_feature\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Check if a user has access to a specific feature"
+      }
+    },
+    {
+      "name": "List User Entitlements",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/grpc"
+          },
+          {
+            "key": "better-auth-token",
+            "value": "{{auth_token}}"
+          }
+        ],
+        "url": {
+          "raw": "grpc://{{base_url}}/payment.v1.PaymentService/ListUserEntitlements",
+          "protocol": "grpc",
+          "host": ["{{base_url}}"],
+          "path": ["payment.v1.PaymentService", "ListUserEntitlements"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"user_id\": \"user123\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "List all entitlements for a specific user"
+      }
+    },
+    {
+      "name": "Create Checkout Session",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/grpc"
+          },
+          {
+            "key": "better-auth-token",
+            "value": "{{auth_token}}"
+          }
+        ],
+        "url": {
+          "raw": "grpc://{{base_url}}/payment.v1.PaymentService/CreateCheckoutSession",
+          "protocol": "grpc",
+          "host": ["{{base_url}}"],
+          "path": ["payment.v1.PaymentService", "CreateCheckoutSession"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"plan_id\": \"basic_monthly\",\n  \"user_id\": \"user123\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Create a checkout session for a subscription plan"
+      }
+    },
+    {
+      "name": "Payment Success Webhook",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/grpc"
+          }
+        ],
+        "url": {
+          "raw": "grpc://{{base_url}}/payment.v1.PaymentService/PaymentSuccessWebhook",
+          "protocol": "grpc",
+          "host": ["{{base_url}}"],
+          "path": ["payment.v1.PaymentService", "PaymentSuccessWebhook"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"payload\": \"eyJ1c2VyX2lkIjoidXNlcjEyMyIsImZlYXR1cmVfY29kZSI6InByZW1pdW1fZmVhdHVyZSIsInBsYW5faWQiOiJiYXNpY19tb250aGx5Iiwic3Vic2NyaXB0aW9uX2lkIjoic3ViX3Rlc3QxMjMiLCJzdGF0dXMiOiJhY3RpdmUiLCJleHBpcmVzX2F0IjpudWxsfQ==\",\n  \"signature\": \"test_signature_123\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Handle payment success webhook (no authentication required)"
+      }
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Set default headers for gRPC requests",
+          "pm.request.headers.add({",
+          "  key: 'Content-Type',",
+          "  value: 'application/grpc'",
+          "});",
+          "",
+          "// Add auth token if not present",
+          "if (!pm.request.headers.has('better-auth-token')) {",
+          "  pm.request.headers.add({",
+          "    key: 'better-auth-token',",
+          "    value: pm.collectionVariables.get('auth_token')",
+          "  });",
+          "}"
+        ]
+      }
+    }
+  ]
+}

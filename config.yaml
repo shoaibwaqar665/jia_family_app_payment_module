@@ -1,28 +1,29 @@
-app_name: "${APP_NAME}"
+app_name: "payment-service"
 
 grpc:
-  address: "${GRPC_ADDRESS}"
+  address: ":8081"
 
 postgres:
-  dsn: "${POSTGRES_DSN}"
+  dsn: "postgres://neondb_owner:sLdJyF0w2Unv@ep-wild-wave-a1nsn7ul.ap-southeast-1.aws.neon.tech:5432/jia_family_app?sslmode=require"
   max_conns: 10
 
 redis:
-  addr: "${REDIS_ADDR}"
-  db: "${REDIS_DB}"
-  password: "${REDIS_PASSWORD}"
+  addr: "localhost:6379"
+  db: 0
+  password: ""
 
 auth:
-  public_key_pem: "${AUTH_PUBLIC_KEY_PEM}"
+  public_key_pem: ""
 
 billing:
-  provider: "${BILLING_PROVIDER}"
+  provider: "stripe"
   stripe_secret: "${STRIPE_SECRET}"
+  stripe_publishable: "${STRIPE_PUBLISHABLE_KEY}"
 
 events:
-  provider: "${EVENTS_PROVIDER}"
-  brokers: "${EVENTS_BROKERS}"
-  topic: "${EVENTS_TOPIC}"
+  provider: "kafka"
+  brokers: ["localhost:9092"]
+  topic: "payments"
 
 log:
-  level: "${LOG_LEVEL}"
+  level: "info"
