@@ -11,6 +11,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/jia-app/paymentservice/internal/cache"
+	"github.com/jia-app/paymentservice/internal/config"
 	"github.com/jia-app/paymentservice/internal/domain"
 	"github.com/jia-app/paymentservice/internal/events"
 	"github.com/jia-app/paymentservice/internal/log"
@@ -19,6 +20,7 @@ import (
 
 // PaymentService provides payment business logic and implements PaymentServiceServer
 type PaymentService struct {
+	config               *config.Config
 	paymentRepo          repository.PaymentRepository
 	planRepo             repository.PlanRepository
 	entitlementRepo      repository.EntitlementRepository
@@ -28,6 +30,7 @@ type PaymentService struct {
 
 // NewPaymentService creates a new payment service
 func NewPaymentService(
+	config *config.Config,
 	paymentRepo repository.PaymentRepository,
 	planRepo repository.PlanRepository,
 	entitlementRepo repository.EntitlementRepository,
@@ -35,6 +38,7 @@ func NewPaymentService(
 	entitlementPublisher events.EntitlementPublisher,
 ) *PaymentService {
 	return &PaymentService{
+		config:               config,
 		paymentRepo:          paymentRepo,
 		planRepo:             planRepo,
 		entitlementRepo:      entitlementRepo,
@@ -316,7 +320,9 @@ func (s *PaymentService) CreateCheckoutSession(ctx context.Context, planID, user
 	log.Info(ctx, "TODO: integrate with actual payment provider",
 		zap.String("plan_id", planID),
 		zap.String("user_id", userID),
-		zap.String("provider", "stripe"))
+		zap.String("provider", "stripe"),
+		zap.String("stripe_secret_key", s.config.Billing.StripeSecret[:12]+"..."),
+		zap.String("stripe_publishable_key", s.config.Billing.StripePublishable[:12]+"..."))
 
 	return &CheckoutSessionResponse{
 		Provider:    "stripe",

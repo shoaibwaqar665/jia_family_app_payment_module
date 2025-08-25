@@ -53,6 +53,18 @@ services:
     profiles:
       - migrate
 
+  # SQLC code generation service (one-off)
+  sqlc:
+    image: kjconroy/sqlc:latest
+    container_name: paymentservice_sqlc
+    volumes:
+      - ./..:/src
+    working_dir: /src
+    networks:
+      - paymentservice_network
+    profiles:
+      - sqlc
+
   # Payment Service (optional, for local development)
   paymentservice:
     build:
