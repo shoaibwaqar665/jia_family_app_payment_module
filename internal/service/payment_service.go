@@ -15,6 +15,7 @@ import (
 	"github.com/jia-app/paymentservice/internal/domain"
 	"github.com/jia-app/paymentservice/internal/events"
 	"github.com/jia-app/paymentservice/internal/log"
+	"github.com/jia-app/paymentservice/internal/pricing"
 	"github.com/jia-app/paymentservice/internal/repository"
 )
 
@@ -26,6 +27,7 @@ type PaymentService struct {
 	entitlementRepo      repository.EntitlementRepository
 	cache                *cache.Cache
 	entitlementPublisher events.EntitlementPublisher
+	priceCalc            *pricing.Calculator
 }
 
 // NewPaymentService creates a new payment service
@@ -36,6 +38,7 @@ func NewPaymentService(
 	entitlementRepo repository.EntitlementRepository,
 	cache *cache.Cache,
 	entitlementPublisher events.EntitlementPublisher,
+	priceCalc *pricing.Calculator,
 ) *PaymentService {
 	return &PaymentService{
 		config:               config,
@@ -44,7 +47,17 @@ func NewPaymentService(
 		entitlementRepo:      entitlementRepo,
 		cache:                cache,
 		entitlementPublisher: entitlementPublisher,
+		priceCalc:            priceCalc,
 	}
+}
+
+// AdjustPrice computes an adjusted price from a base price using a single provided rule.
+// The rule can represent a location factor, time-based discount, or demand surge.
+func (s *PaymentService) AdjustPrice(basePriceCents int64, rule pricing.PricingRule, inputs pricing.ContextualInputs) int64 {
+	if s.priceCalc == nil {
+		return basePriceCents
+	}
+	return s.priceCalc.ApplyWithRules(basePriceCents, inputs, []pricing.PricingRule{rule})
 }
 
 // CreatePayment creates a new payment
