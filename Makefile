@@ -35,11 +35,13 @@ help:
 generate:
 	@echo "Generating code..."
 	@echo "Generating Go code from proto files..."
-	@protoc --go_out=. --go_opt=paths=source_relative \
+	@protoc --plugin=protoc-gen-go=$(shell go env GOPATH)/bin/protoc-gen-go \
+		--plugin=protoc-gen-go-grpc=$(shell go env GOPATH)/bin/protoc-gen-go-grpc \
+		--go_out=. --go_opt=paths=source_relative \
 		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
-		proto/payment/v1/payment_service.proto
+		api/payment/v1/*.proto
 	@echo "Generating SQL code with sqlc..."
-	@docker-compose run --rm sqlc generate -f sqlc.yaml
+	@$(shell go env GOPATH)/bin/sqlc generate -f sqlc.yaml
 	@echo "Code generation complete"
 
 # Validate sqlc configuration and queries

@@ -1,12 +1,13 @@
 version: "2"
 sql:
-  - engine: "postgresql"
-    queries: "internal/payment/repo/postgres/queries/"
-    schema: "migrations/"
+  - schema: "migrations"
+    queries: "internal/payment/repo/postgres/queries"
+    engine: "postgresql"
     gen:
       go:
         package: "pgstore"
         out: "internal/payment/repo/postgres/pgstore"
+        sql_package: "pgx/v5"
         emit_json_tags: true
         emit_prepared_queries: false
         emit_interface: true
@@ -17,18 +18,3 @@ sql:
         emit_params_struct_pointers: false
         emit_methods_with_db_argument: true
         json_tags_case_style: "snake"
-        overrides:
-          - db_type: "uuid"
-            go_type: "github.com/google/uuid.UUID"
-            go_import: "github.com/google/uuid"
-          - db_type: "timestamptz"
-            go_type: "time.Time"
-            go_import: "time"
-          - db_type: "timestamp"
-            go_type: "time.Time"
-            go_import: "time"
-          - db_type: "text[]"
-            go_type: "[]string"
-          - db_type: "jsonb"
-            go_type: "json.RawMessage"
-            go_import: "encoding/json"

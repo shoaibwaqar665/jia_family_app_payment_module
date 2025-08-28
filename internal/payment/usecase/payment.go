@@ -8,45 +8,16 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/jia-app/paymentservice/internal/payment/domain"
+	"github.com/jia-app/paymentservice/internal/payment/repo"
 )
 
 // PaymentUseCase provides business logic for payment operations
 type PaymentUseCase struct {
-	paymentRepo PaymentRepository
-}
-
-// PaymentRepository defines the interface for payment data operations
-type PaymentRepository interface {
-	// Create creates a new payment
-	Create(ctx context.Context, payment *domain.Payment) error
-
-	// GetByID retrieves a payment by ID
-	GetByID(ctx context.Context, id string) (*domain.Payment, error)
-
-	// GetByOrderID retrieves a payment by order ID
-	GetByOrderID(ctx context.Context, orderID string) (*domain.Payment, error)
-
-	// GetByCustomerID retrieves payments by customer ID
-	GetByCustomerID(ctx context.Context, customerID string, limit, offset int) ([]*domain.Payment, error)
-
-	// Update updates an existing payment
-	Update(ctx context.Context, payment *domain.Payment) error
-
-	// UpdateStatus updates only the status of a payment
-	UpdateStatus(ctx context.Context, id string, status string) error
-
-	// Delete deletes a payment (soft delete)
-	Delete(ctx context.Context, id string) error
-
-	// List retrieves a list of payments with pagination
-	List(ctx context.Context, limit, offset int) ([]*domain.Payment, error)
-
-	// Count returns the total number of payments
-	Count(ctx context.Context) (int64, error)
+	paymentRepo repo.PaymentRepository
 }
 
 // NewPaymentUseCase creates a new payment use case
-func NewPaymentUseCase(paymentRepo PaymentRepository) *PaymentUseCase {
+func NewPaymentUseCase(paymentRepo repo.PaymentRepository) *PaymentUseCase {
 	return &PaymentUseCase{
 		paymentRepo: paymentRepo,
 	}

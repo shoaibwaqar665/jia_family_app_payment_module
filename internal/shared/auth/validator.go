@@ -51,3 +51,36 @@ func ExtractTokenFromAuthHeader(authHeader string) string {
 	// If no Bearer prefix, assume the entire header is the token
 	return authHeader
 }
+
+// IsWebhookRequest checks if the request is a webhook (bypasses auth)
+func IsWebhookRequest(ctx context.Context, path string) bool {
+	// Webhook paths that should bypass authentication
+	webhookPaths := []string{
+		"/payment.v1.PaymentService/PaymentSuccessWebhook",
+		"/webhook/payment/success",
+		"/webhook/stripe",
+		"/webhook/billing",
+	}
+
+	for _, webhookPath := range webhookPaths {
+		if strings.Contains(path, webhookPath) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// ValidateWebhook validates webhook requests (stub implementation)
+func ValidateWebhook(ctx context.Context, signature string, payload []byte) error {
+	// TODO: Implement actual webhook signature validation
+	// For now, just check that signature is not empty
+	if signature == "" {
+		return fmt.Errorf("missing webhook signature")
+	}
+
+	// TODO: Validate signature against webhook secret
+	// This would typically involve HMAC validation or similar
+
+	return nil
+}

@@ -4,7 +4,7 @@ package payment.v1;
 
 import "google/protobuf/timestamp.proto";
 
-option go_package = "github.com/jia-app/paymentservice/proto/payment/v1;paymentv1";
+option go_package = "github.com/jia-app/paymentservice/api/payment/v1;paymentv1";
 
 // PaymentService provides payment processing functionality
 service PaymentService {

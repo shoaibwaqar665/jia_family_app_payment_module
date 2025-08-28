@@ -3,17 +3,20 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"math/big"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jia-app/paymentservice/internal/payment/domain"
 	"github.com/jia-app/paymentservice/internal/payment/repo"
+	"github.com/jia-app/paymentservice/internal/payment/repo/postgres/pgstore"
 )
 
 // Store represents the PostgreSQL store implementation
 type Store struct {
-	db *pgxpool.Pool
-	// TODO: Add sqlc generated queries
+	db      *pgxpool.Pool
+	queries *pgstore.Queries
 }
 
 // NewStore creates a new PostgreSQL store
@@ -33,7 +36,8 @@ func NewStore(connString string) (*Store, error) {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	return &Store{db: pool}, nil
+	queries := pgstore.New()
+	return &Store{db: pool, queries: queries}, nil
 }
 
 // NewStoreWithPool creates a new PostgreSQL store with an existing pool
@@ -42,7 +46,8 @@ func NewStoreWithPool(pool *pgxpool.Pool) (*Store, error) {
 		return nil, fmt.Errorf("database pool cannot be nil")
 	}
 
-	return &Store{db: pool}, nil
+	queries := pgstore.New()
+	return &Store{db: pool, queries: queries}, nil
 }
 
 // Close closes the database connection
@@ -67,6 +72,11 @@ func (s *Store) Plan() repo.PlanRepository {
 // Entitlement returns the entitlement repository implementation
 func (s *Store) Entitlement() repo.EntitlementRepository {
 	return &entitlementRepository{store: s}
+}
+
+// PricingZone returns the pricing zone repository implementation
+func (s *Store) PricingZone() repo.PricingZoneRepository {
+	return &pricingZoneRepository{store: s}
 }
 
 // paymentRepository implements repository.PaymentRepository
@@ -178,4 +188,127 @@ func (r *entitlementRepository) UpdateStatus(ctx context.Context, id, status str
 func (r *entitlementRepository) UpdateExpiry(ctx context.Context, id string, expiresAt *time.Time) error {
 	// TODO: Implement with sqlc generated queries
 	return fmt.Errorf("not implemented")
+}
+
+// pricingZoneRepository implements repository.PricingZoneRepository
+type pricingZoneRepository struct {
+	store *Store
+}
+
+// GetByISOCode retrieves a pricing zone by ISO country code
+func (r *pricingZoneRepository) GetByISOCode(ctx context.Context, isoCode string) (domain.PricingZone, error) {
+	pricingZone, err := r.store.queries.GetPricingZoneByISOCode(ctx, r.store.db, isoCode)
+	if err != nil {
+		return domain.PricingZone{}, err
+	}
+	return convertPricingZoneFromDB(pricingZone), nil
+}
+
+// GetByCountry retrieves a pricing zone by country name
+func (r *pricingZoneRepository) GetByCountry(ctx context.Context, country string) (domain.PricingZone, error) {
+	pricingZone, err := r.store.queries.GetPricingZoneByCountry(ctx, r.store.db, country)
+	if err != nil {
+		return domain.PricingZone{}, err
+	}
+	return convertPricingZoneFromDB(pricingZone), nil
+}
+
+// GetByZone retrieves all pricing zones for a specific zone type
+func (r *pricingZoneRepository) GetByZone(ctx context.Context, zone string) ([]domain.PricingZone, error) {
+	pricingZones, err := r.store.queries.GetPricingZonesByZone(ctx, r.store.db, zone)
+	if err != nil {
+		return nil, err
+	}
+	return convertPricingZonesFromDB(pricingZones), nil
+}
+
+// List retrieves all pricing zones
+func (r *pricingZoneRepository) List(ctx context.Context) ([]domain.PricingZone, error) {
+	pricingZones, err := r.store.queries.ListPricingZones(ctx, r.store.db)
+	if err != nil {
+		return nil, err
+	}
+	return convertPricingZonesFromDB(pricingZones), nil
+}
+
+// Upsert creates or updates a pricing zone
+func (r *pricingZoneRepository) Upsert(ctx context.Context, zone domain.PricingZone) (domain.PricingZone, error) {
+	params := pgstore.UpsertPricingZoneParams{
+		Country:                 zone.Country,
+		IsoCode:                 zone.ISOCode,
+		Zone:                    zone.Zone,
+		ZoneName:                zone.ZoneName,
+		WorldBankClassification: pgtype.Text{String: zone.WorldBankClassification, Valid: zone.WorldBankClassification != ""},
+		GniPerCapitaThreshold:   pgtype.Text{String: zone.GNIPerCapitaThreshold, Valid: zone.GNIPerCapitaThreshold != ""},
+		PricingMultiplier:       pgtype.Numeric{Int: big.NewInt(int64(zone.PricingMultiplier * 100)), Valid: true, Exp: -2},
+	}
+
+	pricingZone, err := r.store.queries.UpsertPricingZone(ctx, r.store.db, params)
+	if err != nil {
+		return domain.PricingZone{}, err
+	}
+	return convertPricingZoneFromDB(pricingZone), nil
+}
+
+// BulkUpsert creates or updates multiple pricing zones
+func (r *pricingZoneRepository) BulkUpsert(ctx context.Context, zones []domain.PricingZone) error {
+	for _, zone := range zones {
+		_, err := r.Upsert(ctx, zone)
+		if err != nil {
+			return fmt.Errorf("failed to upsert zone %s: %w", zone.ISOCode, err)
+		}
+	}
+	return nil
+}
+
+// Delete deletes a pricing zone by ISO code
+func (r *pricingZoneRepository) Delete(ctx context.Context, isoCode string) error {
+	return r.store.queries.DeletePricingZone(ctx, r.store.db, isoCode)
+}
+
+// Helper functions to convert between domain and database models
+func convertPricingZoneFromDB(dbZone *pgstore.PricingZone) domain.PricingZone {
+	var multiplier float64
+	if dbZone.PricingMultiplier.Valid {
+		if val, err := dbZone.PricingMultiplier.Float64Value(); err == nil {
+			multiplier = val.Float64
+		}
+	}
+
+	var worldBankClass, gniThreshold string
+	if dbZone.WorldBankClassification.Valid {
+		worldBankClass = dbZone.WorldBankClassification.String
+	}
+	if dbZone.GniPerCapitaThreshold.Valid {
+		gniThreshold = dbZone.GniPerCapitaThreshold.String
+	}
+
+	var createdAt, updatedAt time.Time
+	if dbZone.CreatedAt.Valid {
+		createdAt = dbZone.CreatedAt.Time
+	}
+	if dbZone.UpdatedAt.Valid {
+		updatedAt = dbZone.UpdatedAt.Time
+	}
+
+	return domain.PricingZone{
+		ID:                      string(dbZone.ID.Bytes[:]),
+		Country:                 dbZone.Country,
+		ISOCode:                 dbZone.IsoCode,
+		Zone:                    dbZone.Zone,
+		ZoneName:                dbZone.ZoneName,
+		WorldBankClassification: worldBankClass,
+		GNIPerCapitaThreshold:   gniThreshold,
+		PricingMultiplier:       multiplier,
+		CreatedAt:               createdAt,
+		UpdatedAt:               updatedAt,
+	}
+}
+
+func convertPricingZonesFromDB(dbZones []*pgstore.PricingZone) []domain.PricingZone {
+	zones := make([]domain.PricingZone, len(dbZones))
+	for i, dbZone := range dbZones {
+		zones[i] = convertPricingZoneFromDB(dbZone)
+	}
+	return zones
 }

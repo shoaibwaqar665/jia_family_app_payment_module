@@ -20,6 +20,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	paymentv1 "github.com/jia-app/paymentservice/api/payment/v1"
 	"github.com/jia-app/paymentservice/internal/app/server/interceptors"
 	"github.com/jia-app/paymentservice/internal/shared/config"
 	"github.com/jia-app/paymentservice/internal/shared/log"
@@ -101,6 +102,12 @@ func NewGRPCServer(cfg *config.Config, dbPool *pgxpool.Pool, redisClient *redis.
 // RegisterService registers a gRPC service with the server
 func (s *GRPCServer) RegisterService(desc *grpc.ServiceDesc, impl interface{}) {
 	s.server.RegisterService(desc, impl)
+}
+
+// RegisterPaymentService registers the payment service with the gRPC server
+func (s *GRPCServer) RegisterPaymentService(paymentService paymentv1.PaymentServiceServer) {
+	paymentv1.RegisterPaymentServiceServer(s.server, paymentService)
+	s.logger.Info("Payment service registered with gRPC server")
 }
 
 // GetServer returns the underlying gRPC server

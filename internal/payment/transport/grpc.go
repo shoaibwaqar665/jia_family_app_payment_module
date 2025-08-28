@@ -8,7 +8,9 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
+	paymentv1 "github.com/jia-app/paymentservice/api/payment/v1"
 	"github.com/jia-app/paymentservice/internal/payment/domain"
 	"github.com/jia-app/paymentservice/internal/payment/usecase"
 	"github.com/jia-app/paymentservice/internal/shared/cache"
@@ -18,6 +20,7 @@ import (
 
 // PaymentService provides payment business logic and implements PaymentServiceServer
 type PaymentService struct {
+	paymentv1.UnimplementedPaymentServiceServer
 	config               *config.Config
 	paymentUseCase       *usecase.PaymentUseCase
 	entitlementUseCase   *usecase.EntitlementUseCase
@@ -46,23 +49,116 @@ func NewPaymentService(
 }
 
 // CreatePayment creates a new payment
-func (s *PaymentService) CreatePayment(ctx context.Context, req *domain.PaymentRequest) (*domain.PaymentResponse, error) {
-	return s.paymentUseCase.CreatePayment(ctx, req)
+func (s *PaymentService) CreatePayment(ctx context.Context, req *paymentv1.CreatePaymentRequest) (*paymentv1.CreatePaymentResponse, error) {
+	// Convert proto request to domain request
+	domainReq := &domain.PaymentRequest{
+		Amount:        req.Amount,
+		Currency:      req.Currency,
+		PaymentMethod: req.PaymentMethod,
+		CustomerID:    req.CustomerId,
+		OrderID:       req.OrderId,
+		Description:   req.Description,
+	}
+
+	// Call use case
+	domainResp, err := s.paymentUseCase.CreatePayment(ctx, domainReq)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert domain response to proto response
+	return &paymentv1.CreatePaymentResponse{
+		Payment: &paymentv1.Payment{
+			Id:            domainResp.ID.String(),
+			Amount:        domainResp.Amount,
+			Currency:      domainResp.Currency,
+			Status:        domainResp.Status,
+			PaymentMethod: domainResp.PaymentMethod,
+			CustomerId:    domainResp.CustomerID,
+			OrderId:       domainResp.OrderID,
+			Description:   domainResp.Description,
+			CreatedAt:     timestamppb.New(domainResp.CreatedAt),
+		},
+	}, nil
 }
 
 // GetPayment retrieves a payment by ID
-func (s *PaymentService) GetPayment(ctx context.Context, id string) (*domain.PaymentResponse, error) {
-	return s.paymentUseCase.GetPayment(ctx, id)
+func (s *PaymentService) GetPayment(ctx context.Context, req *paymentv1.GetPaymentRequest) (*paymentv1.GetPaymentResponse, error) {
+	// Call use case
+	domainResp, err := s.paymentUseCase.GetPayment(ctx, req.Id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert domain response to proto response
+	return &paymentv1.GetPaymentResponse{
+		Payment: &paymentv1.Payment{
+			Id:            domainResp.ID.String(),
+			Amount:        domainResp.Amount,
+			Currency:      domainResp.Currency,
+			Status:        domainResp.Status,
+			PaymentMethod: domainResp.PaymentMethod,
+			CustomerId:    domainResp.CustomerID,
+			OrderId:       domainResp.OrderID,
+			Description:   domainResp.Description,
+			CreatedAt:     timestamppb.New(domainResp.CreatedAt),
+		},
+	}, nil
 }
 
 // UpdatePaymentStatus updates the status of a payment
-func (s *PaymentService) UpdatePaymentStatus(ctx context.Context, id string, status string) error {
-	return s.paymentUseCase.UpdatePaymentStatus(ctx, id, status)
+func (s *PaymentService) UpdatePaymentStatus(ctx context.Context, req *paymentv1.UpdatePaymentStatusRequest) (*paymentv1.UpdatePaymentStatusResponse, error) {
+	// Call use case
+	err := s.paymentUseCase.UpdatePaymentStatus(ctx, req.Id, req.Status)
+	if err != nil {
+		return nil, err
+	}
+
+	// Return success response
+	return &paymentv1.UpdatePaymentStatusResponse{
+		Success: true,
+	}, nil
 }
 
 // GetPaymentsByCustomer retrieves payments for a customer
-func (s *PaymentService) GetPaymentsByCustomer(ctx context.Context, customerID string, limit, offset int) ([]*domain.PaymentResponse, error) {
-	return s.paymentUseCase.GetPaymentsByCustomer(ctx, customerID, limit, offset)
+func (s *PaymentService) GetPaymentsByCustomer(ctx context.Context, req *paymentv1.GetPaymentsByCustomerRequest) (*paymentv1.GetPaymentsByCustomerResponse, error) {
+	// Call use case
+	domainResps, err := s.paymentUseCase.GetPaymentsByCustomer(ctx, req.CustomerId, int(req.Limit), int(req.Offset))
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert domain responses to proto responses
+	payments := make([]*paymentv1.Payment, len(domainResps))
+	for i, domainResp := range domainResps {
+		payments[i] = &paymentv1.Payment{
+			Id:            domainResp.ID.String(),
+			Amount:        domainResp.Amount,
+			Currency:      domainResp.Currency,
+			Status:        domainResp.Status,
+			PaymentMethod: domainResp.PaymentMethod,
+			CustomerId:    domainResp.CustomerID,
+			OrderId:       domainResp.OrderID,
+			Description:   domainResp.Description,
+			CreatedAt:     timestamppb.New(domainResp.CreatedAt),
+		}
+	}
+
+	// Return response
+	return &paymentv1.GetPaymentsByCustomerResponse{
+		Payments: payments,
+		Total:    int32(len(payments)), // TODO: Get actual total count
+	}, nil
+}
+
+// ListPayments retrieves a list of payments with pagination
+func (s *PaymentService) ListPayments(ctx context.Context, req *paymentv1.ListPaymentsRequest) (*paymentv1.ListPaymentsResponse, error) {
+	// TODO: Implement ListPayments use case
+	// For now, return empty response
+	return &paymentv1.ListPaymentsResponse{
+		Payments: []*paymentv1.Payment{},
+		Total:    0,
+	}, nil
 }
 
 // CheckEntitlement checks if a user has access to a specific feature
@@ -76,8 +172,13 @@ func (s *PaymentService) ListUserEntitlements(ctx context.Context, userID string
 }
 
 // CreateCheckoutSession creates a checkout session for a plan
-func (s *PaymentService) CreateCheckoutSession(ctx context.Context, planID, userID string) (*usecase.CheckoutSessionResponse, error) {
-	return s.checkoutUseCase.CreateCheckoutSession(ctx, planID, userID)
+func (s *PaymentService) CreateCheckoutSession(ctx context.Context, planID, userID string, familyID *string, countryCode string) (*usecase.CheckoutSessionResponse, error) {
+	return s.checkoutUseCase.CreateCheckoutSession(ctx, planID, userID, familyID, countryCode)
+}
+
+// ApplyWebhook applies a webhook result from billing provider
+func (s *PaymentService) ApplyWebhook(ctx context.Context, wr usecase.WebhookResult) error {
+	return s.checkoutUseCase.ApplyWebhook(ctx, wr)
 }
 
 // PaymentSuccessWebhook handles payment success webhooks

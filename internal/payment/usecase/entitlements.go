@@ -10,6 +10,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/jia-app/paymentservice/internal/payment/domain"
+	"github.com/jia-app/paymentservice/internal/payment/repo"
 	"github.com/jia-app/paymentservice/internal/shared/cache"
 	"github.com/jia-app/paymentservice/internal/shared/events"
 	"github.com/jia-app/paymentservice/internal/shared/log"
@@ -17,23 +18,14 @@ import (
 
 // EntitlementUseCase provides business logic for entitlement operations
 type EntitlementUseCase struct {
-	entitlementRepo      EntitlementRepository
-	cache                *cache.Cache
+	entitlementRepo      repo.EntitlementRepository
+	cache                *cache.Cache // Can be nil if Redis is not available
 	entitlementPublisher events.EntitlementPublisher
-}
-
-// EntitlementRepository defines the interface for entitlement operations
-type EntitlementRepository interface {
-	Check(ctx context.Context, userID, featureCode string) (domain.Entitlement, bool, error)
-	ListByUser(ctx context.Context, userID string) ([]domain.Entitlement, error)
-	Insert(ctx context.Context, e domain.Entitlement) (domain.Entitlement, error)
-	UpdateStatus(ctx context.Context, id, status string) error
-	UpdateExpiry(ctx context.Context, id string, expiresAt *time.Time) error
 }
 
 // NewEntitlementUseCase creates a new entitlement use case
 func NewEntitlementUseCase(
-	entitlementRepo EntitlementRepository,
+	entitlementRepo repo.EntitlementRepository,
 	cache *cache.Cache,
 	entitlementPublisher events.EntitlementPublisher,
 ) *EntitlementUseCase {
@@ -220,4 +212,3 @@ func isValidEntitlement(ent *domain.Entitlement) bool {
 
 	return true
 }
-
