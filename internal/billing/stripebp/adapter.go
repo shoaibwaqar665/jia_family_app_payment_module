@@ -210,9 +210,14 @@ func (a *Adapter) handleCheckoutSessionCompleted(event stripe.Event) (*billing.W
 		return nil, fmt.Errorf("missing required metadata: user_id or plan_id")
 	}
 
-	planID, err := uuid.Parse(planIDStr)
-	if err != nil {
-		return nil, fmt.Errorf("invalid plan_id in metadata: %w", err)
+	// Handle both UUID and string plan IDs
+	var planID uuid.UUID
+	if parsedUUID, err := uuid.Parse(planIDStr); err == nil {
+		// It's a valid UUID
+		planID = parsedUUID
+	} else {
+		// It's a string plan ID, generate a deterministic UUID
+		planID = uuid.NewSHA1(uuid.NameSpaceOID, []byte(planIDStr))
 	}
 
 	basePrice := int64(1999) // Default
@@ -230,15 +235,16 @@ func (a *Adapter) handleCheckoutSessionCompleted(event stripe.Event) (*billing.W
 	featureCode := a.getFeatureCodeForPlan(planIDStr)
 
 	result := &billing.WebhookResult{
-		EventType:   string(billing.WebhookEventTypeCheckoutSessionCompleted),
-		SessionID:   session.ID,
-		UserID:      userID,
-		FeatureCode: featureCode,
-		PlanID:      planID,
-		Amount:      basePrice,
-		Currency:    currency,
-		Status:      "completed",
-		ExpiresAt:   nil, // Lifetime for this POC
+		EventType:    string(billing.WebhookEventTypeCheckoutSessionCompleted),
+		SessionID:    session.ID,
+		UserID:       userID,
+		FeatureCode:  featureCode,
+		PlanID:       planID,
+		PlanIDString: planIDStr, // Store original plan ID string
+		Amount:       basePrice,
+		Currency:     currency,
+		Status:       "completed",
+		ExpiresAt:    nil, // Lifetime for this POC
 		Metadata: map[string]interface{}{
 			"stripe_session_id": session.ID,
 			"payment_status":    session.PaymentStatus,
@@ -325,6 +331,13 @@ func (a *Adapter) handlePaymentFailed(event stripe.Event) (*billing.WebhookResul
 // getFeatureCodeForPlan returns the appropriate feature code for a plan
 func (a *Adapter) getFeatureCodeForPlan(planID string) string {
 	switch planID {
+	case "basic_monthly":
+		return "basic_storage"
+	case "pro_monthly":
+		return "pro_storage"
+	case "family_monthly":
+		return "family_storage"
+	// Legacy UUID support
 	case "550e8400-e29b-41d4-a716-446655440001": // Basic Plan UUID
 		return "basic_storage"
 	case "550e8400-e29b-41d4-a716-446655440002": // Pro Plan UUID

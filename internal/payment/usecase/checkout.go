@@ -11,6 +11,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"github.com/jia-app/paymentservice/internal/billing"
 	"github.com/jia-app/paymentservice/internal/payment/domain"
 	"github.com/jia-app/paymentservice/internal/payment/repo"
 	"github.com/jia-app/paymentservice/internal/shared/cache"
@@ -78,7 +79,7 @@ func (uc *CheckoutUseCase) CreateCheckoutSession(ctx context.Context, planID, us
 		if err == nil {
 			adjustedPrice = pricingZone.CalculateAdjustedPrice(basePrice)
 			pricingMultiplier = pricingZone.PricingMultiplier
-			
+
 			log.Info(ctx, "Applied dynamic pricing",
 				zap.String("country_code", countryCode),
 				zap.String("zone", pricingZone.Zone),
@@ -108,17 +109,17 @@ func (uc *CheckoutUseCase) CreateCheckoutSession(ctx context.Context, planID, us
 		zap.String("provider", "stripe"))
 
 	return &CheckoutSessionResponse{
-		Provider:    "stripe",
-		SessionID:   sessionID,
-		RedirectURL: redirectURL,
-		BasePrice:   basePrice,
-		AdjustedPrice: adjustedPrice,
+		Provider:          "stripe",
+		SessionID:         sessionID,
+		RedirectURL:       redirectURL,
+		BasePrice:         basePrice,
+		AdjustedPrice:     adjustedPrice,
 		PricingMultiplier: pricingMultiplier,
 	}, nil
 }
 
 // ApplyWebhook applies a webhook result from billing provider
-func (uc *CheckoutUseCase) ApplyWebhook(ctx context.Context, wr WebhookResult) error {
+func (uc *CheckoutUseCase) ApplyWebhook(ctx context.Context, wr billing.WebhookResult) error {
 	// Validate webhook result
 	if wr.UserID == "" {
 		return status.Error(codes.InvalidArgument, "user_id is required in webhook result")
@@ -131,12 +132,19 @@ func (uc *CheckoutUseCase) ApplyWebhook(ctx context.Context, wr WebhookResult) e
 	}
 
 	// Create or update entitlement
+	// Use the string plan ID if available, otherwise use the UUID
+	planID := wr.PlanID
+	if wr.PlanIDString != "" {
+		// Convert string plan ID to UUID for domain model
+		planID = uuid.NewSHA1(uuid.NameSpaceOID, []byte(wr.PlanIDString))
+	}
+
 	entitlement := domain.Entitlement{
 		ID:          uuid.New(),
 		UserID:      wr.UserID,
 		FamilyID:    wr.FamilyID,
 		FeatureCode: wr.FeatureCode,
-		PlanID:      wr.PlanID,
+		PlanID:      planID,
 		Status:      "active",
 		GrantedAt:   time.Now(),
 		ExpiresAt:   wr.ExpiresAt,
@@ -178,15 +186,6 @@ type CheckoutSessionResponse struct {
 	BasePrice         int64   `json:"base_price"`         // Base price in cents
 	AdjustedPrice     int64   `json:"adjusted_price"`     // Price after multiplier in cents
 	PricingMultiplier float64 `json:"pricing_multiplier"` // Applied multiplier
-}
-
-// WebhookResult represents the result of a billing webhook
-type WebhookResult struct {
-	UserID      string     `json:"user_id"`
-	FamilyID    *string    `json:"family_id,omitempty"`
-	FeatureCode string     `json:"feature_code"`
-	PlanID      uuid.UUID  `json:"plan_id"`
-	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
 }
 
 // Helper functions

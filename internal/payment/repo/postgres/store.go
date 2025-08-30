@@ -292,11 +292,20 @@ func (r *entitlementRepository) ListByUser(ctx context.Context, userID string) (
 
 	var result []domain.Entitlement
 	for _, ent := range entitlements {
+		// Handle both UUID and string plan IDs
+		var planID uuid.UUID
+		if parsedUUID, err := uuid.Parse(ent.PlanID); err == nil {
+			planID = parsedUUID
+		} else {
+			// It's a string plan ID, generate a deterministic UUID
+			planID = uuid.NewSHA1(uuid.NameSpaceOID, []byte(ent.PlanID))
+		}
+
 		domainEnt := domain.Entitlement{
 			ID:          ent.ID.Bytes,
 			UserID:      ent.UserID,
 			FeatureCode: ent.FeatureCode,
-			PlanID:      uuid.MustParse(ent.PlanID),
+			PlanID:      planID,
 			Status:      ent.Status,
 			GrantedAt:   ent.GrantedAt.Time,
 			CreatedAt:   ent.CreatedAt.Time,
@@ -322,10 +331,24 @@ func (r *entitlementRepository) ListByUser(ctx context.Context, userID string) (
 
 // Insert creates a new entitlement
 func (r *entitlementRepository) Insert(ctx context.Context, e domain.Entitlement) (domain.Entitlement, error) {
+	// For now, we'll use a hardcoded mapping since the domain model uses UUID but DB expects string
+	// TODO: Refactor to use string plan IDs in domain model
+	planIDString := e.PlanID.String()
+
+	// Map UUID-based plan IDs to string plan IDs for database foreign key constraint
+	switch e.PlanID.String() {
+	case uuid.NewSHA1(uuid.NameSpaceOID, []byte("basic_monthly")).String():
+		planIDString = "basic_monthly"
+	case uuid.NewSHA1(uuid.NameSpaceOID, []byte("pro_monthly")).String():
+		planIDString = "pro_monthly"
+	case uuid.NewSHA1(uuid.NameSpaceOID, []byte("family_monthly")).String():
+		planIDString = "family_monthly"
+	}
+
 	params := pgstore.InsertEntitlementParams{
 		UserID:      e.UserID,
 		FeatureCode: e.FeatureCode,
-		PlanID:      e.PlanID.String(),
+		PlanID:      planIDString,
 		Status:      e.Status,
 		GrantedAt:   pgtype.Timestamp{Time: e.GrantedAt, Valid: true},
 		UsageLimits: []byte("{}"),
@@ -349,11 +372,20 @@ func (r *entitlementRepository) Insert(ctx context.Context, e domain.Entitlement
 	}
 
 	// Convert back to domain model
+	// Handle both UUID and string plan IDs
+	var resultPlanID uuid.UUID
+	if parsedUUID, err := uuid.Parse(entitlement.PlanID); err == nil {
+		resultPlanID = parsedUUID
+	} else {
+		// It's a string plan ID, generate a deterministic UUID
+		resultPlanID = uuid.NewSHA1(uuid.NameSpaceOID, []byte(entitlement.PlanID))
+	}
+
 	result := domain.Entitlement{
 		ID:          entitlement.ID.Bytes,
 		UserID:      entitlement.UserID,
 		FeatureCode: entitlement.FeatureCode,
-		PlanID:      uuid.MustParse(entitlement.PlanID),
+		PlanID:      resultPlanID,
 		Status:      entitlement.Status,
 		GrantedAt:   entitlement.GrantedAt.Time,
 		CreatedAt:   entitlement.CreatedAt.Time,

@@ -30,15 +30,15 @@ type Provider interface {
 
 // CreateCheckoutSessionRequest represents a request to create a checkout session
 type CreateCheckoutSessionRequest struct {
-	PlanID        uuid.UUID         `json:"plan_id"`
-	UserID        string            `json:"user_id"`
-	FamilyID      *string           `json:"family_id,omitempty"`
-	SuccessURL    string            `json:"success_url"`
-	CancelURL     string            `json:"cancel_url"`
-	CountryCode   string            `json:"country_code,omitempty"`   // ISO country code for pricing
-	BasePrice     int64             `json:"base_price"`               // Base price in cents
-	Currency      string            `json:"currency"`                 // Currency code
-	Metadata      map[string]string `json:"metadata,omitempty"`
+	PlanID      uuid.UUID         `json:"plan_id"`
+	UserID      string            `json:"user_id"`
+	FamilyID    *string           `json:"family_id,omitempty"`
+	SuccessURL  string            `json:"success_url"`
+	CancelURL   string            `json:"cancel_url"`
+	CountryCode string            `json:"country_code,omitempty"` // ISO country code for pricing
+	BasePrice   int64             `json:"base_price"`             // Base price in cents
+	Currency    string            `json:"currency"`               // Currency code
+	Metadata    map[string]string `json:"metadata,omitempty"`
 }
 
 // CreateCheckoutSessionResponse represents the response from creating a checkout session
@@ -61,17 +61,18 @@ type Session struct {
 
 // WebhookResult represents the result of a billing webhook
 type WebhookResult struct {
-	EventType   string                 `json:"event_type"`
-	SessionID   string                 `json:"session_id"`
-	UserID      string                 `json:"user_id"`
-	FamilyID    *string                `json:"family_id,omitempty"`
-	FeatureCode string                 `json:"feature_code"`
-	PlanID      uuid.UUID              `json:"plan_id"`
-	Amount      int64                  `json:"amount"`
-	Currency    string                 `json:"currency"`
-	Status      string                 `json:"status"`
-	ExpiresAt   *time.Time             `json:"expires_at,omitempty"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	EventType    string                 `json:"event_type"`
+	SessionID    string                 `json:"session_id"`
+	UserID       string                 `json:"user_id"`
+	FamilyID     *string                `json:"family_id,omitempty"`
+	FeatureCode  string                 `json:"feature_code"`
+	PlanID       uuid.UUID              `json:"plan_id"`
+	PlanIDString string                 `json:"plan_id_string"` // Original plan ID string for database
+	Amount       int64                  `json:"amount"`
+	Currency     string                 `json:"currency"`
+	Status       string                 `json:"status"`
+	ExpiresAt    *time.Time             `json:"expires_at,omitempty"`
+	Metadata     map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // SessionStatus represents the status of a checkout session

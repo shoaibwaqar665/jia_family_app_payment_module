@@ -264,13 +264,7 @@ func (s *PaymentService) ProcessWebhook(ctx context.Context, req *paymentv1.Proc
 	}
 
 	// Apply webhook result (create entitlement)
-	if err := s.checkoutUseCase.ApplyWebhook(ctx, usecase.WebhookResult{
-		UserID:      webhookResult.UserID,
-		FamilyID:    webhookResult.FamilyID,
-		FeatureCode: webhookResult.FeatureCode,
-		PlanID:      webhookResult.PlanID,
-		ExpiresAt:   webhookResult.ExpiresAt,
-	}); err != nil {
+	if err := s.checkoutUseCase.ApplyWebhook(ctx, *webhookResult); err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to apply webhook: %v", err)
 	}
 
@@ -286,7 +280,7 @@ func (s *PaymentService) ListUserEntitlements(ctx context.Context, userID string
 }
 
 // ApplyWebhook applies a webhook result from billing provider
-func (s *PaymentService) ApplyWebhook(ctx context.Context, wr usecase.WebhookResult) error {
+func (s *PaymentService) ApplyWebhook(ctx context.Context, wr billing.WebhookResult) error {
 	return s.checkoutUseCase.ApplyWebhook(ctx, wr)
 }
 
