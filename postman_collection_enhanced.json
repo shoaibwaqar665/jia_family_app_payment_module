@@ -1,0 +1,292 @@
+{
+  "info": {
+    "name": "Jia Family App - Payment Service API",
+    "description": "Comprehensive collection for testing the Payment Service gRPC API endpoints including payments, entitlements, plans, and pricing zones",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "2.0.0"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "localhost:8081",
+      "type": "string",
+      "description": "gRPC server address"
+    },
+    {
+      "key": "auth_token",
+      "value": "spiff_id_test_user_123",
+      "type": "string",
+      "description": "Authentication token for testing"
+    },
+    {
+      "key": "user_id",
+      "value": "user_123",
+      "type": "string",
+      "description": "Test user ID"
+    },
+    {
+      "key": "customer_id",
+      "value": "customer_123",
+      "type": "string",
+      "description": "Test customer ID"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health & Status",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/grpc"
+              }
+            ],
+            "url": {
+              "raw": "grpc://{{base_url}}/grpc.health.v1.Health/Check",
+              "protocol": "grpc",
+              "host": ["{{base_url}}"],
+              "path": ["grpc.health.v1.Health", "Check"]
+            },
+            "description": "Check the health status of the payment service"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Payment Operations",
+      "item": [
+        {
+          "name": "Create Payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/grpc"
+              },
+              {
+                "key": "better-auth-token",
+                "value": "{{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "grpc://{{base_url}}/payment.v1.PaymentService/CreatePayment",
+              "protocol": "grpc",
+              "host": ["{{base_url}}"],
+              "path": ["payment.v1.PaymentService", "CreatePayment"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 1999,\n  \"currency\": \"USD\",\n  \"payment_method\": \"credit_card\",\n  \"customer_id\": \"{{customer_id}}\",\n  \"order_id\": \"order_123\",\n  \"description\": \"Pro Plan Monthly Subscription\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Create a new payment transaction"
+          }
+        },
+        {
+          "name": "Get Payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/grpc"
+              },
+              {
+                "key": "better-auth-token",
+                "value": "{{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "grpc://{{base_url}}/payment.v1.PaymentService/GetPayment",
+              "protocol": "grpc",
+              "host": ["{{base_url}}"],
+              "path": ["payment.v1.PaymentService", "GetPayment"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"payment_id_here\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Retrieve a payment by ID"
+          }
+        },
+        {
+          "name": "Update Payment Status",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/grpc"
+              },
+              {
+                "key": "better-auth-token",
+                "value": "{{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "grpc://{{base_url}}/payment.v1.PaymentService/UpdatePaymentStatus",
+              "protocol": "grpc",
+              "host": ["{{base_url}}"],
+              "path": ["payment.v1.PaymentService", "UpdatePaymentStatus"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"payment_id_here\",\n  \"status\": \"completed\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Update the status of a payment"
+          }
+        },
+        {
+          "name": "Get Payments by Customer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/grpc"
+              },
+              {
+                "key": "better-auth-token",
+                "value": "{{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "grpc://{{base_url}}/payment.v1.PaymentService/GetPaymentsByCustomer",
+              "protocol": "grpc",
+              "host": ["{{base_url}}"],
+              "path": ["payment.v1.PaymentService", "GetPaymentsByCustomer"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customer_id\": \"{{customer_id}}\",\n  \"limit\": 10,\n  \"offset\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Get all payments for a specific customer"
+          }
+        },
+        {
+          "name": "List Payments",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/grpc"
+              },
+              {
+                "key": "better-auth-token",
+                "value": "{{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "grpc://{{base_url}}/payment.v1.PaymentService/ListPayments",
+              "protocol": "grpc",
+              "host": ["{{base_url}}"],
+              "path": ["payment.v1.PaymentService", "ListPayments"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"limit\": 20,\n  \"offset\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "List all payments with pagination"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Additional Features (Not in Proto)",
+      "item": [
+        {
+          "name": "⚠️ Note: Extended Features",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "https://httpbin.org/get",
+              "protocol": "https",
+              "host": ["httpbin.org"],
+              "path": ["get"]
+            },
+            "description": "⚠️ IMPORTANT: The current proto file only defines basic payment operations. Additional features like entitlements, checkout sessions, and pricing zones are implemented in the code but not exposed through gRPC endpoints yet. To use these features, you would need to:\n\n1. Add the missing service definitions to the proto file\n2. Regenerate the gRPC code\n3. Update the server registration\n\nFor now, only the 5 basic payment endpoints are available through gRPC."
+          }
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Set default headers for gRPC requests",
+          "pm.request.headers.add({",
+          "  key: 'Content-Type',",
+          "  value: 'application/grpc'",
+          "});",
+          "",
+          "// Add auth token if not present and not a webhook",
+          "if (!pm.request.headers.has('better-auth-token') && !pm.request.url.path.includes('Webhook')) {",
+          "  pm.request.headers.add({",
+          "    key: 'better-auth-token',",
+          "    value: pm.collectionVariables.get('auth_token')",
+          "  });",
+          "}",
+          "",
+          "// Log request details",
+          "console.log('Making gRPC request to:', pm.request.url.toString());",
+          "console.log('Headers:', pm.request.headers.toObject());"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Log response details",
+          "console.log('Response status:', pm.response.status);",
+          "console.log('Response headers:', pm.response.headers.toObject());",
+          "",
+          "// Basic response validation",
+          "pm.test('Response status is OK', function () {",
+          "  pm.expect(pm.response.status).to.be.oneOf([200, 'OK']);",
+          "});",
+          "",
+          "// Log response body if available",
+          "if (pm.response.text()) {",
+          "  console.log('Response body:', pm.response.text());",
+          "}"
+        ]
+      }
+    }
+  ]
+}

@@ -153,11 +153,38 @@ func (s *PaymentService) GetPaymentsByCustomer(ctx context.Context, req *payment
 
 // ListPayments retrieves a list of payments with pagination
 func (s *PaymentService) ListPayments(ctx context.Context, req *paymentv1.ListPaymentsRequest) (*paymentv1.ListPaymentsResponse, error) {
-	// TODO: Implement ListPayments use case
-	// For now, return empty response
+	// Call use case
+	domainResps, err := s.paymentUseCase.ListPayments(ctx, int(req.Limit), int(req.Offset))
+	if err != nil {
+		return nil, err
+	}
+
+	// Get total count
+	total, err := s.paymentUseCase.CountPayments(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert domain responses to proto responses
+	payments := make([]*paymentv1.Payment, len(domainResps))
+	for i, domainResp := range domainResps {
+		payments[i] = &paymentv1.Payment{
+			Id:            domainResp.ID.String(),
+			Amount:        domainResp.Amount,
+			Currency:      domainResp.Currency,
+			Status:        domainResp.Status,
+			PaymentMethod: domainResp.PaymentMethod,
+			CustomerId:    domainResp.CustomerID,
+			OrderId:       domainResp.OrderID,
+			Description:   domainResp.Description,
+			CreatedAt:     timestamppb.New(domainResp.CreatedAt),
+		}
+	}
+
+	// Return response
 	return &paymentv1.ListPaymentsResponse{
-		Payments: []*paymentv1.Payment{},
-		Total:    0,
+		Payments: payments,
+		Total:    int32(total),
 	}, nil
 }
 

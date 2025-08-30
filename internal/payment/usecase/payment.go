@@ -156,3 +156,38 @@ func (uc *PaymentUseCase) validatePaymentRequest(req *domain.PaymentRequest) err
 
 	return nil
 }
+
+// ListPayments retrieves a list of payments with pagination
+func (uc *PaymentUseCase) ListPayments(ctx context.Context, limit, offset int) ([]*domain.PaymentResponse, error) {
+	payments, err := uc.paymentRepo.List(ctx, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list payments: %w", err)
+	}
+
+	responses := make([]*domain.PaymentResponse, len(payments))
+	for i, payment := range payments {
+		responses[i] = &domain.PaymentResponse{
+			ID:            payment.ID,
+			Amount:        payment.Amount,
+			Currency:      payment.Currency,
+			Status:        payment.Status,
+			PaymentMethod: payment.PaymentMethod,
+			CustomerID:    payment.CustomerID,
+			OrderID:       payment.OrderID,
+			Description:   payment.Description,
+			CreatedAt:     payment.CreatedAt,
+		}
+	}
+
+	return responses, nil
+}
+
+// CountPayments returns the total number of payments
+func (uc *PaymentUseCase) CountPayments(ctx context.Context) (int64, error) {
+	count, err := uc.paymentRepo.Count(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count payments: %w", err)
+	}
+
+	return count, nil
+}

@@ -24,6 +24,22 @@ type Entitlement struct {
 	UpdatedAt      pgtype.Timestamp `json:"updated_at"`
 }
 
+type Payment struct {
+	ID                pgtype.UUID      `json:"id"`
+	Amount            int32            `json:"amount"`
+	Currency          string           `json:"currency"`
+	Status            string           `json:"status"`
+	PaymentMethod     string           `json:"payment_method"`
+	CustomerID        string           `json:"customer_id"`
+	OrderID           string           `json:"order_id"`
+	Description       pgtype.Text      `json:"description"`
+	ExternalPaymentID pgtype.Text      `json:"external_payment_id"`
+	FailureReason     pgtype.Text      `json:"failure_reason"`
+	Metadata          []byte           `json:"metadata"`
+	CreatedAt         pgtype.Timestamp `json:"created_at"`
+	UpdatedAt         pgtype.Timestamp `json:"updated_at"`
+}
+
 type Plan struct {
 	ID           string           `json:"id"`
 	Name         string           `json:"name"`

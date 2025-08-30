@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jia-app/paymentservice/internal/payment/domain"
@@ -86,56 +87,172 @@ type paymentRepository struct {
 
 // Create creates a new payment
 func (r *paymentRepository) Create(ctx context.Context, payment *domain.Payment) error {
-	// TODO: Implement with sqlc generated queries
-	return fmt.Errorf("not implemented")
+	params := pgstore.CreatePaymentParams{
+		Amount:            int32(payment.Amount),
+		Currency:          payment.Currency,
+		Status:            payment.Status,
+		PaymentMethod:     payment.PaymentMethod,
+		CustomerID:        payment.CustomerID,
+		OrderID:           payment.OrderID,
+		Description:       pgtype.Text{String: payment.Description, Valid: payment.Description != ""},
+		ExternalPaymentID: pgtype.Text{String: payment.ExternalPaymentID, Valid: payment.ExternalPaymentID != ""},
+		FailureReason:     pgtype.Text{String: payment.FailureReason, Valid: payment.FailureReason != ""},
+		Metadata:          payment.Metadata,
+	}
+
+	dbPayment, err := r.store.queries.CreatePayment(ctx, r.store.db, params)
+	if err != nil {
+		return fmt.Errorf("failed to create payment: %w", err)
+	}
+
+	// Update the payment with the generated ID and timestamps
+	payment.ID = dbPayment.ID.Bytes
+	if dbPayment.CreatedAt.Valid {
+		payment.CreatedAt = dbPayment.CreatedAt.Time
+	}
+	if dbPayment.UpdatedAt.Valid {
+		payment.UpdatedAt = dbPayment.UpdatedAt.Time
+	}
+	return nil
 }
 
 // GetByID retrieves a payment by ID
 func (r *paymentRepository) GetByID(ctx context.Context, id string) (*domain.Payment, error) {
-	// TODO: Implement with sqlc generated queries
-	return nil, fmt.Errorf("not implemented")
+	paymentUUID, err := uuid.Parse(id)
+	if err != nil {
+		return nil, fmt.Errorf("invalid payment ID: %w", err)
+	}
+
+	dbPayment, err := r.store.queries.GetPaymentByID(ctx, r.store.db, pgtype.UUID{Bytes: paymentUUID, Valid: true})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get payment: %w", err)
+	}
+
+	return convertPaymentFromDB(dbPayment), nil
 }
 
 // GetByOrderID retrieves a payment by order ID
 func (r *paymentRepository) GetByOrderID(ctx context.Context, orderID string) (*domain.Payment, error) {
-	// TODO: Implement with sqlc generated queries
-	return nil, fmt.Errorf("not implemented")
+	dbPayment, err := r.store.queries.GetPaymentByOrderID(ctx, r.store.db, orderID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get payment by order ID: %w", err)
+	}
+
+	return convertPaymentFromDB(dbPayment), nil
 }
 
 // GetByCustomerID retrieves payments by customer ID
 func (r *paymentRepository) GetByCustomerID(ctx context.Context, customerID string, limit, offset int) ([]*domain.Payment, error) {
-	// TODO: Implement with sqlc generated queries
-	return nil, fmt.Errorf("not implemented")
+	dbPayments, err := r.store.queries.GetPaymentsByCustomerID(ctx, r.store.db, customerID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get payments by customer ID: %w", err)
+	}
+
+	payments := make([]*domain.Payment, len(dbPayments))
+	for i, dbPayment := range dbPayments {
+		payments[i] = convertPaymentFromDB(dbPayment)
+	}
+
+	// Apply pagination manually since sqlc doesn't support it in this version
+	if offset > 0 && offset < len(payments) {
+		payments = payments[offset:]
+	}
+	if limit > 0 && limit < len(payments) {
+		payments = payments[:limit]
+	}
+
+	return payments, nil
 }
 
 // Update updates an existing payment
 func (r *paymentRepository) Update(ctx context.Context, payment *domain.Payment) error {
-	// TODO: Implement with sqlc generated queries
-	return fmt.Errorf("not implemented")
+	params := pgstore.UpdatePaymentParams{
+		ID:                pgtype.UUID{Bytes: payment.ID, Valid: true},
+		Amount:            int32(payment.Amount),
+		Currency:          payment.Currency,
+		Status:            payment.Status,
+		PaymentMethod:     payment.PaymentMethod,
+		CustomerID:        payment.CustomerID,
+		OrderID:           payment.OrderID,
+		Description:       pgtype.Text{String: payment.Description, Valid: payment.Description != ""},
+		ExternalPaymentID: pgtype.Text{String: payment.ExternalPaymentID, Valid: payment.ExternalPaymentID != ""},
+		FailureReason:     pgtype.Text{String: payment.FailureReason, Valid: payment.FailureReason != ""},
+		Metadata:          payment.Metadata,
+	}
+
+	_, err := r.store.queries.UpdatePayment(ctx, r.store.db, params)
+	if err != nil {
+		return fmt.Errorf("failed to update payment: %w", err)
+	}
+
+	return nil
 }
 
 // UpdateStatus updates only the status of a payment
 func (r *paymentRepository) UpdateStatus(ctx context.Context, id string, status string) error {
-	// TODO: Implement with sqlc generated queries
-	return fmt.Errorf("not implemented")
+	paymentUUID, err := uuid.Parse(id)
+	if err != nil {
+		return fmt.Errorf("invalid payment ID: %w", err)
+	}
+
+	_, err = r.store.queries.UpdatePaymentStatus(ctx, r.store.db, pgstore.UpdatePaymentStatusParams{
+		ID:            pgtype.UUID{Bytes: paymentUUID, Valid: true},
+		Status:        status,
+		FailureReason: pgtype.Text{String: "", Valid: false}, // No failure reason for status updates
+	})
+	if err != nil {
+		return fmt.Errorf("failed to update payment status: %w", err)
+	}
+
+	return nil
 }
 
-// Delete deletes a payment (soft delete)
+// Delete deletes a payment (hard delete)
 func (r *paymentRepository) Delete(ctx context.Context, id string) error {
-	// TODO: Implement with sqlc generated queries
-	return fmt.Errorf("not implemented")
+	paymentUUID, err := uuid.Parse(id)
+	if err != nil {
+		return fmt.Errorf("invalid payment ID: %w", err)
+	}
+
+	err = r.store.queries.DeletePayment(ctx, r.store.db, pgtype.UUID{Bytes: paymentUUID, Valid: true})
+	if err != nil {
+		return fmt.Errorf("failed to delete payment: %w", err)
+	}
+
+	return nil
 }
 
 // List retrieves a list of payments with pagination
 func (r *paymentRepository) List(ctx context.Context, limit, offset int) ([]*domain.Payment, error) {
-	// TODO: Implement with sqlc generated queries
-	return nil, fmt.Errorf("not implemented")
+	dbPayments, err := r.store.queries.ListPayments(ctx, r.store.db)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list payments: %w", err)
+	}
+
+	payments := make([]*domain.Payment, len(dbPayments))
+	for i, dbPayment := range dbPayments {
+		payments[i] = convertPaymentFromDB(dbPayment)
+	}
+
+	// Apply pagination manually since sqlc doesn't support it in this version
+	if offset > 0 && offset < len(payments) {
+		payments = payments[offset:]
+	}
+	if limit > 0 && limit < len(payments) {
+		payments = payments[:limit]
+	}
+
+	return payments, nil
 }
 
 // Count returns the total number of payments
 func (r *paymentRepository) Count(ctx context.Context) (int64, error) {
-	// TODO: Implement with sqlc generated queries
-	return 0, fmt.Errorf("not implemented")
+	count, err := r.store.queries.CountPayments(ctx, r.store.db)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count payments: %w", err)
+	}
+
+	return count, nil
 }
 
 // planRepository implements repository.PlanRepository
@@ -311,4 +428,42 @@ func convertPricingZonesFromDB(dbZones []*pgstore.PricingZone) []domain.PricingZ
 		zones[i] = convertPricingZoneFromDB(dbZone)
 	}
 	return zones
+}
+
+// Helper function to convert payment from database model to domain model
+func convertPaymentFromDB(dbPayment *pgstore.Payment) *domain.Payment {
+	var description, externalPaymentID, failureReason string
+	if dbPayment.Description.Valid {
+		description = dbPayment.Description.String
+	}
+	if dbPayment.ExternalPaymentID.Valid {
+		externalPaymentID = dbPayment.ExternalPaymentID.String
+	}
+	if dbPayment.FailureReason.Valid {
+		failureReason = dbPayment.FailureReason.String
+	}
+
+	var createdAt, updatedAt time.Time
+	if dbPayment.CreatedAt.Valid {
+		createdAt = dbPayment.CreatedAt.Time
+	}
+	if dbPayment.UpdatedAt.Valid {
+		updatedAt = dbPayment.UpdatedAt.Time
+	}
+
+	return &domain.Payment{
+		ID:                dbPayment.ID.Bytes,
+		Amount:            int64(dbPayment.Amount),
+		Currency:          dbPayment.Currency,
+		Status:            dbPayment.Status,
+		PaymentMethod:     dbPayment.PaymentMethod,
+		CustomerID:        dbPayment.CustomerID,
+		OrderID:           dbPayment.OrderID,
+		Description:       description,
+		ExternalPaymentID: externalPaymentID,
+		FailureReason:     failureReason,
+		Metadata:          dbPayment.Metadata,
+		CreatedAt:         createdAt,
+		UpdatedAt:         updatedAt,
+	}
 }

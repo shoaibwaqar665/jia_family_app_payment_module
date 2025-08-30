@@ -9,16 +9,19 @@ import (
 
 // Payment represents a payment transaction
 type Payment struct {
-	ID            uuid.UUID `json:"id"`
-	Amount        int64     `json:"amount"` // Amount in cents
-	Currency      string    `json:"currency"`
-	Status        string    `json:"status"`
-	PaymentMethod string    `json:"payment_method"`
-	CustomerID    string    `json:"customer_id"`
-	OrderID       string    `json:"order_id"`
-	Description   string    `json:"description"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	ID                uuid.UUID `json:"id"`
+	Amount            int64     `json:"amount"` // Amount in cents
+	Currency          string    `json:"currency"`
+	Status            string    `json:"status"`
+	PaymentMethod     string    `json:"payment_method"`
+	CustomerID        string    `json:"customer_id"`
+	OrderID           string    `json:"order_id"`
+	Description       string    `json:"description"`
+	ExternalPaymentID string    `json:"external_payment_id"` // External payment processor ID
+	FailureReason     string    `json:"failure_reason"`      // Reason for payment failure
+	Metadata          []byte    `json:"metadata"`            // Additional payment metadata
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
 }
 
 // PaymentStatus represents the status of a payment

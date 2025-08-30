@@ -41,7 +41,7 @@ services:
 
   # Database migration service (one-off)
   migrate:
-    image: migrate/migrate:v4
+    image: migrate/migrate:latest
     container_name: paymentservice_migrate
     volumes:
       - ./../migrations:/migrations
