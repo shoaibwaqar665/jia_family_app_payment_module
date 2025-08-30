@@ -22,6 +22,21 @@ service PaymentService {
   
   // ListPayments retrieves a list of payments with pagination
   rpc ListPayments(ListPaymentsRequest) returns (ListPaymentsResponse);
+  
+  // CreateCheckoutSession creates a checkout session for payment
+  rpc CreateCheckoutSession(CreateCheckoutSessionRequest) returns (CreateCheckoutSessionResponse);
+  
+  // ProcessWebhook processes webhook events from payment providers
+  rpc ProcessWebhook(ProcessWebhookRequest) returns (ProcessWebhookResponse);
+  
+  // ListEntitlements retrieves entitlements for a user
+  rpc ListEntitlements(ListEntitlementsRequest) returns (ListEntitlementsResponse);
+  
+  // CheckEntitlement checks if a user has access to a feature
+  rpc CheckEntitlement(CheckEntitlementRequest) returns (CheckEntitlementResponse);
+  
+  // ListPricingZones retrieves all pricing zones
+  rpc ListPricingZones(ListPricingZonesRequest) returns (ListPricingZonesResponse);
 }
 
 // CreatePaymentRequest represents a request to create a payment
@@ -116,4 +131,98 @@ enum PaymentMethod {
   PAYMENT_METHOD_DEBIT_CARD = 2;
   PAYMENT_METHOD_BANK_TRANSFER = 3;
   PAYMENT_METHOD_DIGITAL_WALLET = 4;
+}
+
+// CreateCheckoutSessionRequest represents a request to create a checkout session
+message CreateCheckoutSessionRequest {
+  string plan_id = 1;           // Plan identifier
+  string user_id = 2;           // User identifier
+  string family_id = 3;         // Family identifier (optional)
+  string country_code = 4;      // Country code for pricing
+  int64 base_price = 5;         // Base price in cents
+  string currency = 6;          // Currency code
+  string success_url = 7;       // Success redirect URL
+  string cancel_url = 8;        // Cancel redirect URL
+}
+
+// CreateCheckoutSessionResponse represents a response with checkout session details
+message CreateCheckoutSessionResponse {
+  string session_id = 1;        // Checkout session ID
+  string url = 2;               // Checkout URL
+  google.protobuf.Timestamp expires_at = 3;  // Session expiration
+}
+
+// ProcessWebhookRequest represents a webhook processing request
+message ProcessWebhookRequest {
+  bytes payload = 1;            // Webhook payload
+  string signature = 2;         // Webhook signature
+  string provider = 3;          // Payment provider (e.g., "stripe")
+}
+
+// ProcessWebhookResponse represents a response to webhook processing
+message ProcessWebhookResponse {
+  bool success = 1;             // Processing success status
+  string message = 2;           // Response message
+}
+
+// ListEntitlementsRequest represents a request to list user entitlements
+message ListEntitlementsRequest {
+  string user_id = 1;           // User identifier
+  int32 limit = 2;              // Maximum number of entitlements to return
+  int32 offset = 3;             // Number of entitlements to skip
+}
+
+// ListEntitlementsResponse represents a response with entitlements list
+message ListEntitlementsResponse {
+  repeated Entitlement entitlements = 1;
+  int32 total = 2;
+}
+
+// CheckEntitlementRequest represents a request to check user entitlement
+message CheckEntitlementRequest {
+  string user_id = 1;           // User identifier
+  string feature_code = 2;      // Feature code to check
+}
+
+// CheckEntitlementResponse represents a response to entitlement check
+message CheckEntitlementResponse {
+  bool allowed = 1;             // Whether user has access
+  Entitlement entitlement = 2;  // Entitlement details (if exists)
+}
+
+// Entitlement represents a user entitlement
+message Entitlement {
+  string id = 1;                        // Entitlement identifier
+  string user_id = 2;                   // User identifier
+  string family_id = 3;                 // Family identifier (optional)
+  string feature_code = 4;              // Feature code
+  string plan_id = 5;                   // Plan identifier
+  string subscription_id = 6;           // Subscription identifier (optional)
+  string status = 7;                    // Entitlement status
+  google.protobuf.Timestamp granted_at = 8;    // Grant timestamp
+  google.protobuf.Timestamp expires_at = 9;    // Expiration timestamp (optional)
+  google.protobuf.Timestamp created_at = 10;   // Creation timestamp
+  google.protobuf.Timestamp updated_at = 11;   // Last update timestamp
+}
+
+// ListPricingZonesRequest represents a request to list pricing zones
+message ListPricingZonesRequest {
+  // No parameters needed for now
+}
+
+// ListPricingZonesResponse represents a response with pricing zones list
+message ListPricingZonesResponse {
+  repeated PricingZone pricing_zones = 1;
+}
+
+// PricingZone represents a pricing zone
+message PricingZone {
+  string id = 1;                        // Pricing zone identifier
+  string iso_code = 2;                  // ISO country code
+  string country = 3;                   // Country name
+  string zone = 4;                      // Zone type (A, B, C, D)
+  string zone_name = 5;                 // Zone name (Premium, Mid-High, etc.)
+  double pricing_multiplier = 6;        // Pricing multiplier
+  google.protobuf.Timestamp created_at = 7;   // Creation timestamp
+  google.protobuf.Timestamp updated_at = 8;   // Last update timestamp
 }

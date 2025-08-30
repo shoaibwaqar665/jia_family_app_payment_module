@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jia Family App - Payment Service POC</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://js.stripe.com/v3/"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <h1>🏠 Jia Family App</h1>
+                <p>Payment Service POC</p>
+            </div>
+            <div class="user-info">
+                <span class="user-id">User: spiff_id_test_user_123</span>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Plan Selection -->
+            <section class="plans-section">
+                <h2>Choose Your Plan</h2>
+                <div class="plans-grid">
+                    <div class="plan-card" data-plan="basic_monthly">
+                        <div class="plan-header">
+                            <h3>Basic Plan</h3>
+                            <div class="plan-price">
+                                <span class="currency">$</span>
+                                <span class="amount">9.99</span>
+                                <span class="period">/month</span>
+                            </div>
+                        </div>
+                        <div class="plan-features">
+                            <ul>
+                                <li>✅ Basic Storage (10GB)</li>
+                                <li>✅ Basic Support</li>
+                                <li>✅ Core Features</li>
+                                <li>✅ 1,000 API calls/month</li>
+                            </ul>
+                        </div>
+                        <button class="select-plan-btn" data-plan="basic_monthly">Select Plan</button>
+                    </div>
+
+                    <div class="plan-card popular" data-plan="pro_monthly">
+                        <div class="popular-badge">Most Popular</div>
+                        <div class="plan-header">
+                            <h3>Pro Plan</h3>
+                            <div class="plan-price">
+                                <span class="currency">$</span>
+                                <span class="amount">19.99</span>
+                                <span class="period">/month</span>
+                            </div>
+                        </div>
+                        <div class="plan-features">
+                            <ul>
+                                <li>✅ Pro Storage (100GB)</li>
+                                <li>✅ Priority Support</li>
+                                <li>✅ Core Features</li>
+                                <li>✅ Advanced Analytics</li>
+                                <li>✅ API Access</li>
+                                <li>✅ 10,000 API calls/month</li>
+                            </ul>
+                        </div>
+                        <button class="select-plan-btn" data-plan="pro_monthly">Select Plan</button>
+                    </div>
+
+                    <div class="plan-card" data-plan="family_monthly">
+                        <div class="plan-header">
+                            <h3>Family Plan</h3>
+                            <div class="plan-price">
+                                <span class="currency">$</span>
+                                <span class="amount">29.99</span>
+                                <span class="period">/month</span>
+                            </div>
+                        </div>
+                        <div class="plan-features">
+                            <ul>
+                                <li>✅ Family Storage (500GB)</li>
+                                <li>✅ Family Support</li>
+                                <li>✅ Core Features</li>
+                                <li>✅ Family Sharing</li>
+                                <li>✅ Parental Controls</li>
+                                <li>✅ Up to 6 users</li>
+                                <li>✅ 25,000 API calls/month</li>
+                            </ul>
+                        </div>
+                        <button class="select-plan-btn" data-plan="family_monthly">Select Plan</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Payment Form -->
+            <section class="payment-section" id="paymentSection" style="display: none;">
+                <h2>Complete Your Payment</h2>
+                <div class="payment-container">
+                    <div class="selected-plan-info">
+                        <h3 id="selectedPlanName">Pro Plan</h3>
+                        <div class="plan-details">
+                            <div class="detail-row">
+                                <span>Base Price:</span>
+                                <span id="basePrice">$19.99</span>
+                            </div>
+                            <div class="detail-row">
+                                <span>Pricing Zone:</span>
+                                <span id="pricingZone">Premium (1.00x)</span>
+                            </div>
+                            <div class="detail-row total">
+                                <span>Total:</span>
+                                <span id="totalPrice">$19.99</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="payment-form">
+                        <div class="form-group">
+                            <label for="country">Country</label>
+                            <select id="country" onchange="updatePricing()">
+                                <option value="US">United States</option>
+                                <option value="GB">United Kingdom</option>
+                                <option value="DE">Germany</option>
+                                <option value="CN">China</option>
+                                <option value="IN">India</option>
+                                <option value="BR">Brazil</option>
+                                <option value="AF">Afghanistan</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="familyId">Family ID (Optional)</label>
+                            <input type="text" id="familyId" placeholder="Enter family ID if applicable">
+                        </div>
+
+                        <div class="payment-methods">
+                            <h4>Payment Method</h4>
+                            <div class="payment-method">
+                                <input type="radio" id="stripe" name="paymentMethod" value="stripe" checked>
+                                <label for="stripe">
+                                    <span class="payment-icon">💳</span>
+                                    Credit/Debit Card (Stripe)
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="payment-actions">
+                            <button class="btn-secondary" onclick="goBack()">Back to Plans</button>
+                            <button class="btn-primary" id="payButton" onclick="processPayment()">
+                                <span id="payButtonText">Pay Now</span>
+                                <span id="payButtonLoading" style="display: none;">Processing...</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Payment Status -->
+            <section class="status-section" id="statusSection" style="display: none;">
+                <div class="status-container">
+                    <div class="status-icon" id="statusIcon">⏳</div>
+                    <h2 id="statusTitle">Processing Payment</h2>
+                    <p id="statusMessage">Please wait while we process your payment...</p>
+                    <div class="status-details" id="statusDetails"></div>
+                    <button class="btn-primary" id="statusButton" onclick="resetFlow()" style="display: none;">
+                        Start New Payment
+                    </button>
+                </div>
+            </section>
+
+            <!-- Entitlements Display -->
+            <section class="entitlements-section" id="entitlementsSection" style="display: none;">
+                <h2>Your Entitlements</h2>
+                <div class="entitlements-container" id="entitlementsContainer">
+                    <!-- Entitlements will be populated here -->
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <div class="footer-content">
+                <p>© 2024 Jia Family App - Payment Service POC</p>
+                <div class="footer-links">
+                    <a href="#" onclick="showEntitlements()">View Entitlements</a>
+                    <a href="#" onclick="resetFlow()">Reset Demo</a>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay" style="display: none;">
+        <div class="loading-spinner"></div>
+        <p>Processing...</p>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="script.js"></script>
+</body>
+</html>

@@ -24,6 +24,7 @@ func NewAuthInterceptor() *AuthInterceptor {
 	return &AuthInterceptor{
 		whitelistedMethods: map[string]bool{
 			"/payment.v1.PaymentService/PaymentSuccessWebhook": true,
+			"/payment.v1.PaymentService/ListPricingZones":      true,
 		},
 	}
 }

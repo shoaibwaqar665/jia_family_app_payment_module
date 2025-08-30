@@ -24,6 +24,11 @@ const (
 	PaymentService_UpdatePaymentStatus_FullMethodName   = "/payment.v1.PaymentService/UpdatePaymentStatus"
 	PaymentService_GetPaymentsByCustomer_FullMethodName = "/payment.v1.PaymentService/GetPaymentsByCustomer"
 	PaymentService_ListPayments_FullMethodName          = "/payment.v1.PaymentService/ListPayments"
+	PaymentService_CreateCheckoutSession_FullMethodName = "/payment.v1.PaymentService/CreateCheckoutSession"
+	PaymentService_ProcessWebhook_FullMethodName        = "/payment.v1.PaymentService/ProcessWebhook"
+	PaymentService_ListEntitlements_FullMethodName      = "/payment.v1.PaymentService/ListEntitlements"
+	PaymentService_CheckEntitlement_FullMethodName      = "/payment.v1.PaymentService/CheckEntitlement"
+	PaymentService_ListPricingZones_FullMethodName      = "/payment.v1.PaymentService/ListPricingZones"
 )
 
 // PaymentServiceClient is the client API for PaymentService service.
@@ -42,6 +47,16 @@ type PaymentServiceClient interface {
 	GetPaymentsByCustomer(ctx context.Context, in *GetPaymentsByCustomerRequest, opts ...grpc.CallOption) (*GetPaymentsByCustomerResponse, error)
 	// ListPayments retrieves a list of payments with pagination
 	ListPayments(ctx context.Context, in *ListPaymentsRequest, opts ...grpc.CallOption) (*ListPaymentsResponse, error)
+	// CreateCheckoutSession creates a checkout session for payment
+	CreateCheckoutSession(ctx context.Context, in *CreateCheckoutSessionRequest, opts ...grpc.CallOption) (*CreateCheckoutSessionResponse, error)
+	// ProcessWebhook processes webhook events from payment providers
+	ProcessWebhook(ctx context.Context, in *ProcessWebhookRequest, opts ...grpc.CallOption) (*ProcessWebhookResponse, error)
+	// ListEntitlements retrieves entitlements for a user
+	ListEntitlements(ctx context.Context, in *ListEntitlementsRequest, opts ...grpc.CallOption) (*ListEntitlementsResponse, error)
+	// CheckEntitlement checks if a user has access to a feature
+	CheckEntitlement(ctx context.Context, in *CheckEntitlementRequest, opts ...grpc.CallOption) (*CheckEntitlementResponse, error)
+	// ListPricingZones retrieves all pricing zones
+	ListPricingZones(ctx context.Context, in *ListPricingZonesRequest, opts ...grpc.CallOption) (*ListPricingZonesResponse, error)
 }
 
 type paymentServiceClient struct {
@@ -102,6 +117,56 @@ func (c *paymentServiceClient) ListPayments(ctx context.Context, in *ListPayment
 	return out, nil
 }
 
+func (c *paymentServiceClient) CreateCheckoutSession(ctx context.Context, in *CreateCheckoutSessionRequest, opts ...grpc.CallOption) (*CreateCheckoutSessionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateCheckoutSessionResponse)
+	err := c.cc.Invoke(ctx, PaymentService_CreateCheckoutSession_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *paymentServiceClient) ProcessWebhook(ctx context.Context, in *ProcessWebhookRequest, opts ...grpc.CallOption) (*ProcessWebhookResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ProcessWebhookResponse)
+	err := c.cc.Invoke(ctx, PaymentService_ProcessWebhook_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *paymentServiceClient) ListEntitlements(ctx context.Context, in *ListEntitlementsRequest, opts ...grpc.CallOption) (*ListEntitlementsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListEntitlementsResponse)
+	err := c.cc.Invoke(ctx, PaymentService_ListEntitlements_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *paymentServiceClient) CheckEntitlement(ctx context.Context, in *CheckEntitlementRequest, opts ...grpc.CallOption) (*CheckEntitlementResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CheckEntitlementResponse)
+	err := c.cc.Invoke(ctx, PaymentService_CheckEntitlement_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *paymentServiceClient) ListPricingZones(ctx context.Context, in *ListPricingZonesRequest, opts ...grpc.CallOption) (*ListPricingZonesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListPricingZonesResponse)
+	err := c.cc.Invoke(ctx, PaymentService_ListPricingZones_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PaymentServiceServer is the server API for PaymentService service.
 // All implementations must embed UnimplementedPaymentServiceServer
 // for forward compatibility.
@@ -118,6 +183,16 @@ type PaymentServiceServer interface {
 	GetPaymentsByCustomer(context.Context, *GetPaymentsByCustomerRequest) (*GetPaymentsByCustomerResponse, error)
 	// ListPayments retrieves a list of payments with pagination
 	ListPayments(context.Context, *ListPaymentsRequest) (*ListPaymentsResponse, error)
+	// CreateCheckoutSession creates a checkout session for payment
+	CreateCheckoutSession(context.Context, *CreateCheckoutSessionRequest) (*CreateCheckoutSessionResponse, error)
+	// ProcessWebhook processes webhook events from payment providers
+	ProcessWebhook(context.Context, *ProcessWebhookRequest) (*ProcessWebhookResponse, error)
+	// ListEntitlements retrieves entitlements for a user
+	ListEntitlements(context.Context, *ListEntitlementsRequest) (*ListEntitlementsResponse, error)
+	// CheckEntitlement checks if a user has access to a feature
+	CheckEntitlement(context.Context, *CheckEntitlementRequest) (*CheckEntitlementResponse, error)
+	// ListPricingZones retrieves all pricing zones
+	ListPricingZones(context.Context, *ListPricingZonesRequest) (*ListPricingZonesResponse, error)
 	mustEmbedUnimplementedPaymentServiceServer()
 }
 
@@ -142,6 +217,21 @@ func (UnimplementedPaymentServiceServer) GetPaymentsByCustomer(context.Context, 
 }
 func (UnimplementedPaymentServiceServer) ListPayments(context.Context, *ListPaymentsRequest) (*ListPaymentsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListPayments not implemented")
+}
+func (UnimplementedPaymentServiceServer) CreateCheckoutSession(context.Context, *CreateCheckoutSessionRequest) (*CreateCheckoutSessionResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateCheckoutSession not implemented")
+}
+func (UnimplementedPaymentServiceServer) ProcessWebhook(context.Context, *ProcessWebhookRequest) (*ProcessWebhookResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ProcessWebhook not implemented")
+}
+func (UnimplementedPaymentServiceServer) ListEntitlements(context.Context, *ListEntitlementsRequest) (*ListEntitlementsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListEntitlements not implemented")
+}
+func (UnimplementedPaymentServiceServer) CheckEntitlement(context.Context, *CheckEntitlementRequest) (*CheckEntitlementResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CheckEntitlement not implemented")
+}
+func (UnimplementedPaymentServiceServer) ListPricingZones(context.Context, *ListPricingZonesRequest) (*ListPricingZonesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListPricingZones not implemented")
 }
 func (UnimplementedPaymentServiceServer) mustEmbedUnimplementedPaymentServiceServer() {}
 func (UnimplementedPaymentServiceServer) testEmbeddedByValue()                        {}
@@ -254,6 +344,96 @@ func _PaymentService_ListPayments_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PaymentService_CreateCheckoutSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateCheckoutSessionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PaymentServiceServer).CreateCheckoutSession(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PaymentService_CreateCheckoutSession_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PaymentServiceServer).CreateCheckoutSession(ctx, req.(*CreateCheckoutSessionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PaymentService_ProcessWebhook_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ProcessWebhookRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PaymentServiceServer).ProcessWebhook(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PaymentService_ProcessWebhook_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PaymentServiceServer).ProcessWebhook(ctx, req.(*ProcessWebhookRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PaymentService_ListEntitlements_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListEntitlementsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PaymentServiceServer).ListEntitlements(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PaymentService_ListEntitlements_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PaymentServiceServer).ListEntitlements(ctx, req.(*ListEntitlementsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PaymentService_CheckEntitlement_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckEntitlementRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PaymentServiceServer).CheckEntitlement(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PaymentService_CheckEntitlement_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PaymentServiceServer).CheckEntitlement(ctx, req.(*CheckEntitlementRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PaymentService_ListPricingZones_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListPricingZonesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PaymentServiceServer).ListPricingZones(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PaymentService_ListPricingZones_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PaymentServiceServer).ListPricingZones(ctx, req.(*ListPricingZonesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PaymentService_ServiceDesc is the grpc.ServiceDesc for PaymentService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -280,6 +460,26 @@ var PaymentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListPayments",
 			Handler:    _PaymentService_ListPayments_Handler,
+		},
+		{
+			MethodName: "CreateCheckoutSession",
+			Handler:    _PaymentService_CreateCheckoutSession_Handler,
+		},
+		{
+			MethodName: "ProcessWebhook",
+			Handler:    _PaymentService_ProcessWebhook_Handler,
+		},
+		{
+			MethodName: "ListEntitlements",
+			Handler:    _PaymentService_ListEntitlements_Handler,
+		},
+		{
+			MethodName: "CheckEntitlement",
+			Handler:    _PaymentService_CheckEntitlement_Handler,
+		},
+		{
+			MethodName: "ListPricingZones",
+			Handler:    _PaymentService_ListPricingZones_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

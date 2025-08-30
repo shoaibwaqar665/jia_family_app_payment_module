@@ -792,6 +792,810 @@ func (x *Payment) GetUpdatedAt() *timestamppb.Timestamp {
 	return nil
 }
 
+// CreateCheckoutSessionRequest represents a request to create a checkout session
+type CreateCheckoutSessionRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PlanId        string                 `protobuf:"bytes,1,opt,name=plan_id,json=planId,proto3" json:"plan_id,omitempty"`                // Plan identifier
+	UserId        string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`                // User identifier
+	FamilyId      string                 `protobuf:"bytes,3,opt,name=family_id,json=familyId,proto3" json:"family_id,omitempty"`          // Family identifier (optional)
+	CountryCode   string                 `protobuf:"bytes,4,opt,name=country_code,json=countryCode,proto3" json:"country_code,omitempty"` // Country code for pricing
+	BasePrice     int64                  `protobuf:"varint,5,opt,name=base_price,json=basePrice,proto3" json:"base_price,omitempty"`      // Base price in cents
+	Currency      string                 `protobuf:"bytes,6,opt,name=currency,proto3" json:"currency,omitempty"`                          // Currency code
+	SuccessUrl    string                 `protobuf:"bytes,7,opt,name=success_url,json=successUrl,proto3" json:"success_url,omitempty"`    // Success redirect URL
+	CancelUrl     string                 `protobuf:"bytes,8,opt,name=cancel_url,json=cancelUrl,proto3" json:"cancel_url,omitempty"`       // Cancel redirect URL
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateCheckoutSessionRequest) Reset() {
+	*x = CreateCheckoutSessionRequest{}
+	mi := &file_api_payment_v1_payment_service_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateCheckoutSessionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateCheckoutSessionRequest) ProtoMessage() {}
+
+func (x *CreateCheckoutSessionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_payment_v1_payment_service_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateCheckoutSessionRequest.ProtoReflect.Descriptor instead.
+func (*CreateCheckoutSessionRequest) Descriptor() ([]byte, []int) {
+	return file_api_payment_v1_payment_service_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *CreateCheckoutSessionRequest) GetPlanId() string {
+	if x != nil {
+		return x.PlanId
+	}
+	return ""
+}
+
+func (x *CreateCheckoutSessionRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *CreateCheckoutSessionRequest) GetFamilyId() string {
+	if x != nil {
+		return x.FamilyId
+	}
+	return ""
+}
+
+func (x *CreateCheckoutSessionRequest) GetCountryCode() string {
+	if x != nil {
+		return x.CountryCode
+	}
+	return ""
+}
+
+func (x *CreateCheckoutSessionRequest) GetBasePrice() int64 {
+	if x != nil {
+		return x.BasePrice
+	}
+	return 0
+}
+
+func (x *CreateCheckoutSessionRequest) GetCurrency() string {
+	if x != nil {
+		return x.Currency
+	}
+	return ""
+}
+
+func (x *CreateCheckoutSessionRequest) GetSuccessUrl() string {
+	if x != nil {
+		return x.SuccessUrl
+	}
+	return ""
+}
+
+func (x *CreateCheckoutSessionRequest) GetCancelUrl() string {
+	if x != nil {
+		return x.CancelUrl
+	}
+	return ""
+}
+
+// CreateCheckoutSessionResponse represents a response with checkout session details
+type CreateCheckoutSessionResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"` // Checkout session ID
+	Url           string                 `protobuf:"bytes,2,opt,name=url,proto3" json:"url,omitempty"`                              // Checkout URL
+	ExpiresAt     *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"` // Session expiration
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateCheckoutSessionResponse) Reset() {
+	*x = CreateCheckoutSessionResponse{}
+	mi := &file_api_payment_v1_payment_service_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateCheckoutSessionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateCheckoutSessionResponse) ProtoMessage() {}
+
+func (x *CreateCheckoutSessionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_payment_v1_payment_service_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateCheckoutSessionResponse.ProtoReflect.Descriptor instead.
+func (*CreateCheckoutSessionResponse) Descriptor() ([]byte, []int) {
+	return file_api_payment_v1_payment_service_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *CreateCheckoutSessionResponse) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *CreateCheckoutSessionResponse) GetUrl() string {
+	if x != nil {
+		return x.Url
+	}
+	return ""
+}
+
+func (x *CreateCheckoutSessionResponse) GetExpiresAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ExpiresAt
+	}
+	return nil
+}
+
+// ProcessWebhookRequest represents a webhook processing request
+type ProcessWebhookRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Payload       []byte                 `protobuf:"bytes,1,opt,name=payload,proto3" json:"payload,omitempty"`     // Webhook payload
+	Signature     string                 `protobuf:"bytes,2,opt,name=signature,proto3" json:"signature,omitempty"` // Webhook signature
+	Provider      string                 `protobuf:"bytes,3,opt,name=provider,proto3" json:"provider,omitempty"`   // Payment provider (e.g., "stripe")
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ProcessWebhookRequest) Reset() {
+	*x = ProcessWebhookRequest{}
+	mi := &file_api_payment_v1_payment_service_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProcessWebhookRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProcessWebhookRequest) ProtoMessage() {}
+
+func (x *ProcessWebhookRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_payment_v1_payment_service_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProcessWebhookRequest.ProtoReflect.Descriptor instead.
+func (*ProcessWebhookRequest) Descriptor() ([]byte, []int) {
+	return file_api_payment_v1_payment_service_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *ProcessWebhookRequest) GetPayload() []byte {
+	if x != nil {
+		return x.Payload
+	}
+	return nil
+}
+
+func (x *ProcessWebhookRequest) GetSignature() string {
+	if x != nil {
+		return x.Signature
+	}
+	return ""
+}
+
+func (x *ProcessWebhookRequest) GetProvider() string {
+	if x != nil {
+		return x.Provider
+	}
+	return ""
+}
+
+// ProcessWebhookResponse represents a response to webhook processing
+type ProcessWebhookResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"` // Processing success status
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`  // Response message
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ProcessWebhookResponse) Reset() {
+	*x = ProcessWebhookResponse{}
+	mi := &file_api_payment_v1_payment_service_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProcessWebhookResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProcessWebhookResponse) ProtoMessage() {}
+
+func (x *ProcessWebhookResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_payment_v1_payment_service_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProcessWebhookResponse.ProtoReflect.Descriptor instead.
+func (*ProcessWebhookResponse) Descriptor() ([]byte, []int) {
+	return file_api_payment_v1_payment_service_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *ProcessWebhookResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *ProcessWebhookResponse) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+// ListEntitlementsRequest represents a request to list user entitlements
+type ListEntitlementsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"` // User identifier
+	Limit         int32                  `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`                // Maximum number of entitlements to return
+	Offset        int32                  `protobuf:"varint,3,opt,name=offset,proto3" json:"offset,omitempty"`              // Number of entitlements to skip
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListEntitlementsRequest) Reset() {
+	*x = ListEntitlementsRequest{}
+	mi := &file_api_payment_v1_payment_service_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListEntitlementsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListEntitlementsRequest) ProtoMessage() {}
+
+func (x *ListEntitlementsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_payment_v1_payment_service_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListEntitlementsRequest.ProtoReflect.Descriptor instead.
+func (*ListEntitlementsRequest) Descriptor() ([]byte, []int) {
+	return file_api_payment_v1_payment_service_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *ListEntitlementsRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *ListEntitlementsRequest) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+func (x *ListEntitlementsRequest) GetOffset() int32 {
+	if x != nil {
+		return x.Offset
+	}
+	return 0
+}
+
+// ListEntitlementsResponse represents a response with entitlements list
+type ListEntitlementsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Entitlements  []*Entitlement         `protobuf:"bytes,1,rep,name=entitlements,proto3" json:"entitlements,omitempty"`
+	Total         int32                  `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListEntitlementsResponse) Reset() {
+	*x = ListEntitlementsResponse{}
+	mi := &file_api_payment_v1_payment_service_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListEntitlementsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListEntitlementsResponse) ProtoMessage() {}
+
+func (x *ListEntitlementsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_payment_v1_payment_service_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListEntitlementsResponse.ProtoReflect.Descriptor instead.
+func (*ListEntitlementsResponse) Descriptor() ([]byte, []int) {
+	return file_api_payment_v1_payment_service_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *ListEntitlementsResponse) GetEntitlements() []*Entitlement {
+	if x != nil {
+		return x.Entitlements
+	}
+	return nil
+}
+
+func (x *ListEntitlementsResponse) GetTotal() int32 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
+}
+
+// CheckEntitlementRequest represents a request to check user entitlement
+type CheckEntitlementRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`                // User identifier
+	FeatureCode   string                 `protobuf:"bytes,2,opt,name=feature_code,json=featureCode,proto3" json:"feature_code,omitempty"` // Feature code to check
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CheckEntitlementRequest) Reset() {
+	*x = CheckEntitlementRequest{}
+	mi := &file_api_payment_v1_payment_service_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CheckEntitlementRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CheckEntitlementRequest) ProtoMessage() {}
+
+func (x *CheckEntitlementRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_payment_v1_payment_service_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CheckEntitlementRequest.ProtoReflect.Descriptor instead.
+func (*CheckEntitlementRequest) Descriptor() ([]byte, []int) {
+	return file_api_payment_v1_payment_service_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *CheckEntitlementRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *CheckEntitlementRequest) GetFeatureCode() string {
+	if x != nil {
+		return x.FeatureCode
+	}
+	return ""
+}
+
+// CheckEntitlementResponse represents a response to entitlement check
+type CheckEntitlementResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Allowed       bool                   `protobuf:"varint,1,opt,name=allowed,proto3" json:"allowed,omitempty"`        // Whether user has access
+	Entitlement   *Entitlement           `protobuf:"bytes,2,opt,name=entitlement,proto3" json:"entitlement,omitempty"` // Entitlement details (if exists)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CheckEntitlementResponse) Reset() {
+	*x = CheckEntitlementResponse{}
+	mi := &file_api_payment_v1_payment_service_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CheckEntitlementResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CheckEntitlementResponse) ProtoMessage() {}
+
+func (x *CheckEntitlementResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_payment_v1_payment_service_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CheckEntitlementResponse.ProtoReflect.Descriptor instead.
+func (*CheckEntitlementResponse) Descriptor() ([]byte, []int) {
+	return file_api_payment_v1_payment_service_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *CheckEntitlementResponse) GetAllowed() bool {
+	if x != nil {
+		return x.Allowed
+	}
+	return false
+}
+
+func (x *CheckEntitlementResponse) GetEntitlement() *Entitlement {
+	if x != nil {
+		return x.Entitlement
+	}
+	return nil
+}
+
+// Entitlement represents a user entitlement
+type Entitlement struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Id             string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`                                               // Entitlement identifier
+	UserId         string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`                         // User identifier
+	FamilyId       string                 `protobuf:"bytes,3,opt,name=family_id,json=familyId,proto3" json:"family_id,omitempty"`                   // Family identifier (optional)
+	FeatureCode    string                 `protobuf:"bytes,4,opt,name=feature_code,json=featureCode,proto3" json:"feature_code,omitempty"`          // Feature code
+	PlanId         string                 `protobuf:"bytes,5,opt,name=plan_id,json=planId,proto3" json:"plan_id,omitempty"`                         // Plan identifier
+	SubscriptionId string                 `protobuf:"bytes,6,opt,name=subscription_id,json=subscriptionId,proto3" json:"subscription_id,omitempty"` // Subscription identifier (optional)
+	Status         string                 `protobuf:"bytes,7,opt,name=status,proto3" json:"status,omitempty"`                                       // Entitlement status
+	GrantedAt      *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=granted_at,json=grantedAt,proto3" json:"granted_at,omitempty"`                // Grant timestamp
+	ExpiresAt      *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`                // Expiration timestamp (optional)
+	CreatedAt      *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`               // Creation timestamp
+	UpdatedAt      *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`               // Last update timestamp
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *Entitlement) Reset() {
+	*x = Entitlement{}
+	mi := &file_api_payment_v1_payment_service_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Entitlement) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Entitlement) ProtoMessage() {}
+
+func (x *Entitlement) ProtoReflect() protoreflect.Message {
+	mi := &file_api_payment_v1_payment_service_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Entitlement.ProtoReflect.Descriptor instead.
+func (*Entitlement) Descriptor() ([]byte, []int) {
+	return file_api_payment_v1_payment_service_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *Entitlement) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *Entitlement) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *Entitlement) GetFamilyId() string {
+	if x != nil {
+		return x.FamilyId
+	}
+	return ""
+}
+
+func (x *Entitlement) GetFeatureCode() string {
+	if x != nil {
+		return x.FeatureCode
+	}
+	return ""
+}
+
+func (x *Entitlement) GetPlanId() string {
+	if x != nil {
+		return x.PlanId
+	}
+	return ""
+}
+
+func (x *Entitlement) GetSubscriptionId() string {
+	if x != nil {
+		return x.SubscriptionId
+	}
+	return ""
+}
+
+func (x *Entitlement) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *Entitlement) GetGrantedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.GrantedAt
+	}
+	return nil
+}
+
+func (x *Entitlement) GetExpiresAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ExpiresAt
+	}
+	return nil
+}
+
+func (x *Entitlement) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
+func (x *Entitlement) GetUpdatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return nil
+}
+
+// ListPricingZonesRequest represents a request to list pricing zones
+type ListPricingZonesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListPricingZonesRequest) Reset() {
+	*x = ListPricingZonesRequest{}
+	mi := &file_api_payment_v1_payment_service_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListPricingZonesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListPricingZonesRequest) ProtoMessage() {}
+
+func (x *ListPricingZonesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_payment_v1_payment_service_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListPricingZonesRequest.ProtoReflect.Descriptor instead.
+func (*ListPricingZonesRequest) Descriptor() ([]byte, []int) {
+	return file_api_payment_v1_payment_service_proto_rawDescGZIP(), []int{20}
+}
+
+// ListPricingZonesResponse represents a response with pricing zones list
+type ListPricingZonesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PricingZones  []*PricingZone         `protobuf:"bytes,1,rep,name=pricing_zones,json=pricingZones,proto3" json:"pricing_zones,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListPricingZonesResponse) Reset() {
+	*x = ListPricingZonesResponse{}
+	mi := &file_api_payment_v1_payment_service_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListPricingZonesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListPricingZonesResponse) ProtoMessage() {}
+
+func (x *ListPricingZonesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_payment_v1_payment_service_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListPricingZonesResponse.ProtoReflect.Descriptor instead.
+func (*ListPricingZonesResponse) Descriptor() ([]byte, []int) {
+	return file_api_payment_v1_payment_service_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *ListPricingZonesResponse) GetPricingZones() []*PricingZone {
+	if x != nil {
+		return x.PricingZones
+	}
+	return nil
+}
+
+// PricingZone represents a pricing zone
+type PricingZone struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Id                string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`                                                          // Pricing zone identifier
+	IsoCode           string                 `protobuf:"bytes,2,opt,name=iso_code,json=isoCode,proto3" json:"iso_code,omitempty"`                                 // ISO country code
+	Country           string                 `protobuf:"bytes,3,opt,name=country,proto3" json:"country,omitempty"`                                                // Country name
+	Zone              string                 `protobuf:"bytes,4,opt,name=zone,proto3" json:"zone,omitempty"`                                                      // Zone type (A, B, C, D)
+	ZoneName          string                 `protobuf:"bytes,5,opt,name=zone_name,json=zoneName,proto3" json:"zone_name,omitempty"`                              // Zone name (Premium, Mid-High, etc.)
+	PricingMultiplier float64                `protobuf:"fixed64,6,opt,name=pricing_multiplier,json=pricingMultiplier,proto3" json:"pricing_multiplier,omitempty"` // Pricing multiplier
+	CreatedAt         *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`                           // Creation timestamp
+	UpdatedAt         *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`                           // Last update timestamp
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *PricingZone) Reset() {
+	*x = PricingZone{}
+	mi := &file_api_payment_v1_payment_service_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PricingZone) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PricingZone) ProtoMessage() {}
+
+func (x *PricingZone) ProtoReflect() protoreflect.Message {
+	mi := &file_api_payment_v1_payment_service_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PricingZone.ProtoReflect.Descriptor instead.
+func (*PricingZone) Descriptor() ([]byte, []int) {
+	return file_api_payment_v1_payment_service_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *PricingZone) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *PricingZone) GetIsoCode() string {
+	if x != nil {
+		return x.IsoCode
+	}
+	return ""
+}
+
+func (x *PricingZone) GetCountry() string {
+	if x != nil {
+		return x.Country
+	}
+	return ""
+}
+
+func (x *PricingZone) GetZone() string {
+	if x != nil {
+		return x.Zone
+	}
+	return ""
+}
+
+func (x *PricingZone) GetZoneName() string {
+	if x != nil {
+		return x.ZoneName
+	}
+	return ""
+}
+
+func (x *PricingZone) GetPricingMultiplier() float64 {
+	if x != nil {
+		return x.PricingMultiplier
+	}
+	return 0
+}
+
+func (x *PricingZone) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
+func (x *PricingZone) GetUpdatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return nil
+}
+
 var File_api_payment_v1_payment_service_proto protoreflect.FileDescriptor
 
 const file_api_payment_v1_payment_service_proto_rawDesc = "" +
@@ -845,7 +1649,76 @@ const file_api_payment_v1_payment_service_proto_rawDesc = "" +
 	"created_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
 	"updated_at\x18\n" +
-	" \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt*\xbf\x01\n" +
+	" \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\x8b\x02\n" +
+	"\x1cCreateCheckoutSessionRequest\x12\x17\n" +
+	"\aplan_id\x18\x01 \x01(\tR\x06planId\x12\x17\n" +
+	"\auser_id\x18\x02 \x01(\tR\x06userId\x12\x1b\n" +
+	"\tfamily_id\x18\x03 \x01(\tR\bfamilyId\x12!\n" +
+	"\fcountry_code\x18\x04 \x01(\tR\vcountryCode\x12\x1d\n" +
+	"\n" +
+	"base_price\x18\x05 \x01(\x03R\tbasePrice\x12\x1a\n" +
+	"\bcurrency\x18\x06 \x01(\tR\bcurrency\x12\x1f\n" +
+	"\vsuccess_url\x18\a \x01(\tR\n" +
+	"successUrl\x12\x1d\n" +
+	"\n" +
+	"cancel_url\x18\b \x01(\tR\tcancelUrl\"\x8b\x01\n" +
+	"\x1dCreateCheckoutSessionResponse\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x10\n" +
+	"\x03url\x18\x02 \x01(\tR\x03url\x129\n" +
+	"\n" +
+	"expires_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\"k\n" +
+	"\x15ProcessWebhookRequest\x12\x18\n" +
+	"\apayload\x18\x01 \x01(\fR\apayload\x12\x1c\n" +
+	"\tsignature\x18\x02 \x01(\tR\tsignature\x12\x1a\n" +
+	"\bprovider\x18\x03 \x01(\tR\bprovider\"L\n" +
+	"\x16ProcessWebhookResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"`\n" +
+	"\x17ListEntitlementsRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x14\n" +
+	"\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x16\n" +
+	"\x06offset\x18\x03 \x01(\x05R\x06offset\"m\n" +
+	"\x18ListEntitlementsResponse\x12;\n" +
+	"\fentitlements\x18\x01 \x03(\v2\x17.payment.v1.EntitlementR\fentitlements\x12\x14\n" +
+	"\x05total\x18\x02 \x01(\x05R\x05total\"U\n" +
+	"\x17CheckEntitlementRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x12!\n" +
+	"\ffeature_code\x18\x02 \x01(\tR\vfeatureCode\"o\n" +
+	"\x18CheckEntitlementResponse\x12\x18\n" +
+	"\aallowed\x18\x01 \x01(\bR\aallowed\x129\n" +
+	"\ventitlement\x18\x02 \x01(\v2\x17.payment.v1.EntitlementR\ventitlement\"\xbc\x03\n" +
+	"\vEntitlement\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
+	"\auser_id\x18\x02 \x01(\tR\x06userId\x12\x1b\n" +
+	"\tfamily_id\x18\x03 \x01(\tR\bfamilyId\x12!\n" +
+	"\ffeature_code\x18\x04 \x01(\tR\vfeatureCode\x12\x17\n" +
+	"\aplan_id\x18\x05 \x01(\tR\x06planId\x12'\n" +
+	"\x0fsubscription_id\x18\x06 \x01(\tR\x0esubscriptionId\x12\x16\n" +
+	"\x06status\x18\a \x01(\tR\x06status\x129\n" +
+	"\n" +
+	"granted_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tgrantedAt\x129\n" +
+	"\n" +
+	"expires_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\x129\n" +
+	"\n" +
+	"created_at\x18\n" +
+	" \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
+	"\n" +
+	"updated_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\x19\n" +
+	"\x17ListPricingZonesRequest\"X\n" +
+	"\x18ListPricingZonesResponse\x12<\n" +
+	"\rpricing_zones\x18\x01 \x03(\v2\x17.payment.v1.PricingZoneR\fpricingZones\"\xa8\x02\n" +
+	"\vPricingZone\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x19\n" +
+	"\biso_code\x18\x02 \x01(\tR\aisoCode\x12\x18\n" +
+	"\acountry\x18\x03 \x01(\tR\acountry\x12\x12\n" +
+	"\x04zone\x18\x04 \x01(\tR\x04zone\x12\x1b\n" +
+	"\tzone_name\x18\x05 \x01(\tR\bzoneName\x12-\n" +
+	"\x12pricing_multiplier\x18\x06 \x01(\x01R\x11pricingMultiplier\x129\n" +
+	"\n" +
+	"created_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
+	"\n" +
+	"updated_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt*\xbf\x01\n" +
 	"\rPaymentStatus\x12\x1e\n" +
 	"\x1aPAYMENT_STATUS_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16PAYMENT_STATUS_PENDING\x10\x01\x12\x1c\n" +
@@ -858,14 +1731,19 @@ const file_api_payment_v1_payment_service_proto_rawDesc = "" +
 	"\x1aPAYMENT_METHOD_CREDIT_CARD\x10\x01\x12\x1d\n" +
 	"\x19PAYMENT_METHOD_DEBIT_CARD\x10\x02\x12 \n" +
 	"\x1cPAYMENT_METHOD_BANK_TRANSFER\x10\x03\x12!\n" +
-	"\x1dPAYMENT_METHOD_DIGITAL_WALLET\x10\x042\xdc\x03\n" +
+	"\x1dPAYMENT_METHOD_DIGITAL_WALLET\x10\x042\xc0\a\n" +
 	"\x0ePaymentService\x12T\n" +
 	"\rCreatePayment\x12 .payment.v1.CreatePaymentRequest\x1a!.payment.v1.CreatePaymentResponse\x12K\n" +
 	"\n" +
 	"GetPayment\x12\x1d.payment.v1.GetPaymentRequest\x1a\x1e.payment.v1.GetPaymentResponse\x12f\n" +
 	"\x13UpdatePaymentStatus\x12&.payment.v1.UpdatePaymentStatusRequest\x1a'.payment.v1.UpdatePaymentStatusResponse\x12l\n" +
 	"\x15GetPaymentsByCustomer\x12(.payment.v1.GetPaymentsByCustomerRequest\x1a).payment.v1.GetPaymentsByCustomerResponse\x12Q\n" +
-	"\fListPayments\x12\x1f.payment.v1.ListPaymentsRequest\x1a .payment.v1.ListPaymentsResponseB<Z:github.com/jia-app/paymentservice/api/payment/v1;paymentv1b\x06proto3"
+	"\fListPayments\x12\x1f.payment.v1.ListPaymentsRequest\x1a .payment.v1.ListPaymentsResponse\x12l\n" +
+	"\x15CreateCheckoutSession\x12(.payment.v1.CreateCheckoutSessionRequest\x1a).payment.v1.CreateCheckoutSessionResponse\x12W\n" +
+	"\x0eProcessWebhook\x12!.payment.v1.ProcessWebhookRequest\x1a\".payment.v1.ProcessWebhookResponse\x12]\n" +
+	"\x10ListEntitlements\x12#.payment.v1.ListEntitlementsRequest\x1a$.payment.v1.ListEntitlementsResponse\x12]\n" +
+	"\x10CheckEntitlement\x12#.payment.v1.CheckEntitlementRequest\x1a$.payment.v1.CheckEntitlementResponse\x12]\n" +
+	"\x10ListPricingZones\x12#.payment.v1.ListPricingZonesRequest\x1a$.payment.v1.ListPricingZonesResponseB<Z:github.com/jia-app/paymentservice/api/payment/v1;paymentv1b\x06proto3"
 
 var (
 	file_api_payment_v1_payment_service_proto_rawDescOnce sync.Once
@@ -880,7 +1758,7 @@ func file_api_payment_v1_payment_service_proto_rawDescGZIP() []byte {
 }
 
 var file_api_payment_v1_payment_service_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_api_payment_v1_payment_service_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_api_payment_v1_payment_service_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
 var file_api_payment_v1_payment_service_proto_goTypes = []any{
 	(PaymentStatus)(0),                    // 0: payment.v1.PaymentStatus
 	(PaymentMethod)(0),                    // 1: payment.v1.PaymentMethod
@@ -895,30 +1773,62 @@ var file_api_payment_v1_payment_service_proto_goTypes = []any{
 	(*ListPaymentsRequest)(nil),           // 10: payment.v1.ListPaymentsRequest
 	(*ListPaymentsResponse)(nil),          // 11: payment.v1.ListPaymentsResponse
 	(*Payment)(nil),                       // 12: payment.v1.Payment
-	(*timestamppb.Timestamp)(nil),         // 13: google.protobuf.Timestamp
+	(*CreateCheckoutSessionRequest)(nil),  // 13: payment.v1.CreateCheckoutSessionRequest
+	(*CreateCheckoutSessionResponse)(nil), // 14: payment.v1.CreateCheckoutSessionResponse
+	(*ProcessWebhookRequest)(nil),         // 15: payment.v1.ProcessWebhookRequest
+	(*ProcessWebhookResponse)(nil),        // 16: payment.v1.ProcessWebhookResponse
+	(*ListEntitlementsRequest)(nil),       // 17: payment.v1.ListEntitlementsRequest
+	(*ListEntitlementsResponse)(nil),      // 18: payment.v1.ListEntitlementsResponse
+	(*CheckEntitlementRequest)(nil),       // 19: payment.v1.CheckEntitlementRequest
+	(*CheckEntitlementResponse)(nil),      // 20: payment.v1.CheckEntitlementResponse
+	(*Entitlement)(nil),                   // 21: payment.v1.Entitlement
+	(*ListPricingZonesRequest)(nil),       // 22: payment.v1.ListPricingZonesRequest
+	(*ListPricingZonesResponse)(nil),      // 23: payment.v1.ListPricingZonesResponse
+	(*PricingZone)(nil),                   // 24: payment.v1.PricingZone
+	(*timestamppb.Timestamp)(nil),         // 25: google.protobuf.Timestamp
 }
 var file_api_payment_v1_payment_service_proto_depIdxs = []int32{
 	12, // 0: payment.v1.CreatePaymentResponse.payment:type_name -> payment.v1.Payment
 	12, // 1: payment.v1.GetPaymentResponse.payment:type_name -> payment.v1.Payment
 	12, // 2: payment.v1.GetPaymentsByCustomerResponse.payments:type_name -> payment.v1.Payment
 	12, // 3: payment.v1.ListPaymentsResponse.payments:type_name -> payment.v1.Payment
-	13, // 4: payment.v1.Payment.created_at:type_name -> google.protobuf.Timestamp
-	13, // 5: payment.v1.Payment.updated_at:type_name -> google.protobuf.Timestamp
-	2,  // 6: payment.v1.PaymentService.CreatePayment:input_type -> payment.v1.CreatePaymentRequest
-	4,  // 7: payment.v1.PaymentService.GetPayment:input_type -> payment.v1.GetPaymentRequest
-	6,  // 8: payment.v1.PaymentService.UpdatePaymentStatus:input_type -> payment.v1.UpdatePaymentStatusRequest
-	8,  // 9: payment.v1.PaymentService.GetPaymentsByCustomer:input_type -> payment.v1.GetPaymentsByCustomerRequest
-	10, // 10: payment.v1.PaymentService.ListPayments:input_type -> payment.v1.ListPaymentsRequest
-	3,  // 11: payment.v1.PaymentService.CreatePayment:output_type -> payment.v1.CreatePaymentResponse
-	5,  // 12: payment.v1.PaymentService.GetPayment:output_type -> payment.v1.GetPaymentResponse
-	7,  // 13: payment.v1.PaymentService.UpdatePaymentStatus:output_type -> payment.v1.UpdatePaymentStatusResponse
-	9,  // 14: payment.v1.PaymentService.GetPaymentsByCustomer:output_type -> payment.v1.GetPaymentsByCustomerResponse
-	11, // 15: payment.v1.PaymentService.ListPayments:output_type -> payment.v1.ListPaymentsResponse
-	11, // [11:16] is the sub-list for method output_type
-	6,  // [6:11] is the sub-list for method input_type
-	6,  // [6:6] is the sub-list for extension type_name
-	6,  // [6:6] is the sub-list for extension extendee
-	0,  // [0:6] is the sub-list for field type_name
+	25, // 4: payment.v1.Payment.created_at:type_name -> google.protobuf.Timestamp
+	25, // 5: payment.v1.Payment.updated_at:type_name -> google.protobuf.Timestamp
+	25, // 6: payment.v1.CreateCheckoutSessionResponse.expires_at:type_name -> google.protobuf.Timestamp
+	21, // 7: payment.v1.ListEntitlementsResponse.entitlements:type_name -> payment.v1.Entitlement
+	21, // 8: payment.v1.CheckEntitlementResponse.entitlement:type_name -> payment.v1.Entitlement
+	25, // 9: payment.v1.Entitlement.granted_at:type_name -> google.protobuf.Timestamp
+	25, // 10: payment.v1.Entitlement.expires_at:type_name -> google.protobuf.Timestamp
+	25, // 11: payment.v1.Entitlement.created_at:type_name -> google.protobuf.Timestamp
+	25, // 12: payment.v1.Entitlement.updated_at:type_name -> google.protobuf.Timestamp
+	24, // 13: payment.v1.ListPricingZonesResponse.pricing_zones:type_name -> payment.v1.PricingZone
+	25, // 14: payment.v1.PricingZone.created_at:type_name -> google.protobuf.Timestamp
+	25, // 15: payment.v1.PricingZone.updated_at:type_name -> google.protobuf.Timestamp
+	2,  // 16: payment.v1.PaymentService.CreatePayment:input_type -> payment.v1.CreatePaymentRequest
+	4,  // 17: payment.v1.PaymentService.GetPayment:input_type -> payment.v1.GetPaymentRequest
+	6,  // 18: payment.v1.PaymentService.UpdatePaymentStatus:input_type -> payment.v1.UpdatePaymentStatusRequest
+	8,  // 19: payment.v1.PaymentService.GetPaymentsByCustomer:input_type -> payment.v1.GetPaymentsByCustomerRequest
+	10, // 20: payment.v1.PaymentService.ListPayments:input_type -> payment.v1.ListPaymentsRequest
+	13, // 21: payment.v1.PaymentService.CreateCheckoutSession:input_type -> payment.v1.CreateCheckoutSessionRequest
+	15, // 22: payment.v1.PaymentService.ProcessWebhook:input_type -> payment.v1.ProcessWebhookRequest
+	17, // 23: payment.v1.PaymentService.ListEntitlements:input_type -> payment.v1.ListEntitlementsRequest
+	19, // 24: payment.v1.PaymentService.CheckEntitlement:input_type -> payment.v1.CheckEntitlementRequest
+	22, // 25: payment.v1.PaymentService.ListPricingZones:input_type -> payment.v1.ListPricingZonesRequest
+	3,  // 26: payment.v1.PaymentService.CreatePayment:output_type -> payment.v1.CreatePaymentResponse
+	5,  // 27: payment.v1.PaymentService.GetPayment:output_type -> payment.v1.GetPaymentResponse
+	7,  // 28: payment.v1.PaymentService.UpdatePaymentStatus:output_type -> payment.v1.UpdatePaymentStatusResponse
+	9,  // 29: payment.v1.PaymentService.GetPaymentsByCustomer:output_type -> payment.v1.GetPaymentsByCustomerResponse
+	11, // 30: payment.v1.PaymentService.ListPayments:output_type -> payment.v1.ListPaymentsResponse
+	14, // 31: payment.v1.PaymentService.CreateCheckoutSession:output_type -> payment.v1.CreateCheckoutSessionResponse
+	16, // 32: payment.v1.PaymentService.ProcessWebhook:output_type -> payment.v1.ProcessWebhookResponse
+	18, // 33: payment.v1.PaymentService.ListEntitlements:output_type -> payment.v1.ListEntitlementsResponse
+	20, // 34: payment.v1.PaymentService.CheckEntitlement:output_type -> payment.v1.CheckEntitlementResponse
+	23, // 35: payment.v1.PaymentService.ListPricingZones:output_type -> payment.v1.ListPricingZonesResponse
+	26, // [26:36] is the sub-list for method output_type
+	16, // [16:26] is the sub-list for method input_type
+	16, // [16:16] is the sub-list for extension type_name
+	16, // [16:16] is the sub-list for extension extendee
+	0,  // [0:16] is the sub-list for field type_name
 }
 
 func init() { file_api_payment_v1_payment_service_proto_init() }
@@ -932,7 +1842,7 @@ func file_api_payment_v1_payment_service_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_payment_v1_payment_service_proto_rawDesc), len(file_api_payment_v1_payment_service_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   11,
+			NumMessages:   23,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

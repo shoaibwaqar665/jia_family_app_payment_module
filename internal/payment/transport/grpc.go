@@ -11,6 +11,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	paymentv1 "github.com/jia-app/paymentservice/api/payment/v1"
+	"github.com/jia-app/paymentservice/internal/billing"
 	"github.com/jia-app/paymentservice/internal/payment/domain"
 	"github.com/jia-app/paymentservice/internal/payment/usecase"
 	"github.com/jia-app/paymentservice/internal/shared/cache"
@@ -25,8 +26,10 @@ type PaymentService struct {
 	paymentUseCase       *usecase.PaymentUseCase
 	entitlementUseCase   *usecase.EntitlementUseCase
 	checkoutUseCase      *usecase.CheckoutUseCase
+	pricingZoneUseCase   *usecase.PricingZoneUseCase
 	cache                *cache.Cache
 	entitlementPublisher events.EntitlementPublisher
+	billingProvider      billing.Provider
 }
 
 // NewPaymentService creates a new payment service
@@ -35,16 +38,20 @@ func NewPaymentService(
 	paymentUseCase *usecase.PaymentUseCase,
 	entitlementUseCase *usecase.EntitlementUseCase,
 	checkoutUseCase *usecase.CheckoutUseCase,
+	pricingZoneUseCase *usecase.PricingZoneUseCase,
 	cache *cache.Cache,
 	entitlementPublisher events.EntitlementPublisher,
+	billingProvider billing.Provider,
 ) *PaymentService {
 	return &PaymentService{
 		config:               config,
 		paymentUseCase:       paymentUseCase,
 		entitlementUseCase:   entitlementUseCase,
 		checkoutUseCase:      checkoutUseCase,
+		pricingZoneUseCase:   pricingZoneUseCase,
 		cache:                cache,
 		entitlementPublisher: entitlementPublisher,
+		billingProvider:      billingProvider,
 	}
 }
 
@@ -188,19 +195,94 @@ func (s *PaymentService) ListPayments(ctx context.Context, req *paymentv1.ListPa
 	}, nil
 }
 
-// CheckEntitlement checks if a user has access to a specific feature
-func (s *PaymentService) CheckEntitlement(ctx context.Context, userID, featureCode string) (*usecase.CheckEntitlementResponse, error) {
-	return s.entitlementUseCase.CheckEntitlement(ctx, userID, featureCode)
+// CreateCheckoutSession creates a checkout session for payment
+func (s *PaymentService) CreateCheckoutSession(ctx context.Context, req *paymentv1.CreateCheckoutSessionRequest) (*paymentv1.CreateCheckoutSessionResponse, error) {
+	// Convert plan ID to UUID
+	planID, err := uuid.Parse(req.PlanId)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid plan_id")
+	}
+
+	// Prepare billing request
+	billingReq := billing.CreateCheckoutSessionRequest{
+		PlanID:      planID,
+		UserID:      req.UserId,
+		CountryCode: req.CountryCode,
+		BasePrice:   req.BasePrice,
+		Currency:    req.Currency,
+		SuccessURL:  req.SuccessUrl,
+		CancelURL:   req.CancelUrl,
+	}
+
+	// Add family ID if provided
+	if req.FamilyId != "" {
+		billingReq.FamilyID = &req.FamilyId
+	}
+
+	// Create checkout session using billing provider
+	session, err := s.billingProvider.CreateCheckoutSession(ctx, billingReq)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to create checkout session: %v", err)
+	}
+
+	// Create a payment record in the database
+	paymentReq := &domain.PaymentRequest{
+		Amount:        req.BasePrice,
+		Currency:      req.Currency,
+		PaymentMethod: "credit_card",
+		CustomerID:    req.UserId,
+		OrderID:       session.SessionID, // Use session ID as order ID
+		Description:   fmt.Sprintf("Checkout session for plan %s", req.PlanId),
+	}
+
+	_, err = s.paymentUseCase.CreatePayment(ctx, paymentReq)
+	if err != nil {
+		// Log error but don't fail the checkout session creation
+		// The payment record can be created later via webhook
+		fmt.Printf("Warning: Failed to create payment record: %v\n", err)
+	}
+
+	// Convert to protobuf response
+	return &paymentv1.CreateCheckoutSessionResponse{
+		SessionId: session.SessionID,
+		Url:       session.URL,
+		ExpiresAt: timestamppb.New(session.ExpiresAt),
+	}, nil
+}
+
+// ProcessWebhook processes webhook events from payment providers
+func (s *PaymentService) ProcessWebhook(ctx context.Context, req *paymentv1.ProcessWebhookRequest) (*paymentv1.ProcessWebhookResponse, error) {
+	// Validate webhook signature
+	if err := s.billingProvider.ValidateWebhook(ctx, req.Payload, req.Signature); err != nil {
+		return nil, status.Errorf(codes.Unauthenticated, "webhook validation failed: %v", err)
+	}
+
+	// Parse webhook payload
+	webhookResult, err := s.billingProvider.ParseWebhook(ctx, req.Payload)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to parse webhook: %v", err)
+	}
+
+	// Apply webhook result (create entitlement)
+	if err := s.checkoutUseCase.ApplyWebhook(ctx, usecase.WebhookResult{
+		UserID:      webhookResult.UserID,
+		FamilyID:    webhookResult.FamilyID,
+		FeatureCode: webhookResult.FeatureCode,
+		PlanID:      webhookResult.PlanID,
+		ExpiresAt:   webhookResult.ExpiresAt,
+	}); err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to apply webhook: %v", err)
+	}
+
+	return &paymentv1.ProcessWebhookResponse{
+		Success: true,
+		Message: "Webhook processed successfully",
+	}, nil
 }
 
 // ListUserEntitlements lists all entitlements for a user
 func (s *PaymentService) ListUserEntitlements(ctx context.Context, userID string) ([]*domain.Entitlement, error) {
 	return s.entitlementUseCase.ListUserEntitlements(ctx, userID)
-}
-
-// CreateCheckoutSession creates a checkout session for a plan
-func (s *PaymentService) CreateCheckoutSession(ctx context.Context, planID, userID string, familyID *string, countryCode string) (*usecase.CheckoutSessionResponse, error) {
-	return s.checkoutUseCase.CreateCheckoutSession(ctx, planID, userID, familyID, countryCode)
 }
 
 // ApplyWebhook applies a webhook result from billing provider
@@ -256,5 +338,118 @@ func (s *PaymentService) parseWebhookPayload(payload []byte) (*WebhookData, erro
 		FeatureCode: "premium_feature",
 		PlanID:      uuid.New(),
 		ExpiresAt:   nil, // Never expires
+	}, nil
+}
+
+// ListEntitlements retrieves entitlements for a user
+func (s *PaymentService) ListEntitlements(ctx context.Context, req *paymentv1.ListEntitlementsRequest) (*paymentv1.ListEntitlementsResponse, error) {
+	// Get entitlements from use case
+	entitlements, err := s.entitlementUseCase.ListUserEntitlements(ctx, req.UserId)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to list entitlements: %v", err)
+	}
+
+	// Convert to protobuf
+	var pbEntitlements []*paymentv1.Entitlement
+	for _, ent := range entitlements {
+		pbEntitlement := &paymentv1.Entitlement{
+			Id:          ent.ID.String(),
+			UserId:      ent.UserID,
+			FeatureCode: ent.FeatureCode,
+			PlanId:      ent.PlanID.String(),
+			Status:      ent.Status,
+			GrantedAt:   timestamppb.New(ent.GrantedAt),
+			CreatedAt:   timestamppb.New(ent.CreatedAt),
+			UpdatedAt:   timestamppb.New(ent.UpdatedAt),
+		}
+
+		// Add optional fields
+		if ent.FamilyID != nil && *ent.FamilyID != "" {
+			pbEntitlement.FamilyId = *ent.FamilyID
+		}
+		if ent.SubscriptionID != nil && *ent.SubscriptionID != "" {
+			pbEntitlement.SubscriptionId = *ent.SubscriptionID
+		}
+		if ent.ExpiresAt != nil {
+			pbEntitlement.ExpiresAt = timestamppb.New(*ent.ExpiresAt)
+		}
+
+		pbEntitlements = append(pbEntitlements, pbEntitlement)
+	}
+
+	return &paymentv1.ListEntitlementsResponse{
+		Entitlements: pbEntitlements,
+		Total:        int32(len(pbEntitlements)),
+	}, nil
+}
+
+// CheckEntitlement checks if a user has access to a feature
+func (s *PaymentService) CheckEntitlement(ctx context.Context, req *paymentv1.CheckEntitlementRequest) (*paymentv1.CheckEntitlementResponse, error) {
+	// Check entitlement using use case
+	response, err := s.entitlementUseCase.CheckEntitlement(ctx, req.UserId, req.FeatureCode)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to check entitlement: %v", err)
+	}
+
+	// Convert to protobuf
+	pbResponse := &paymentv1.CheckEntitlementResponse{
+		Allowed: response.Allowed,
+	}
+
+	if response.Entitlement != nil {
+		pbEntitlement := &paymentv1.Entitlement{
+			Id:          response.Entitlement.ID.String(),
+			UserId:      response.Entitlement.UserID,
+			FeatureCode: response.Entitlement.FeatureCode,
+			PlanId:      response.Entitlement.PlanID.String(),
+			Status:      response.Entitlement.Status,
+			GrantedAt:   timestamppb.New(response.Entitlement.GrantedAt),
+			CreatedAt:   timestamppb.New(response.Entitlement.CreatedAt),
+			UpdatedAt:   timestamppb.New(response.Entitlement.UpdatedAt),
+		}
+
+		// Add optional fields
+		if response.Entitlement.FamilyID != nil && *response.Entitlement.FamilyID != "" {
+			pbEntitlement.FamilyId = *response.Entitlement.FamilyID
+		}
+		if response.Entitlement.SubscriptionID != nil && *response.Entitlement.SubscriptionID != "" {
+			pbEntitlement.SubscriptionId = *response.Entitlement.SubscriptionID
+		}
+		if response.Entitlement.ExpiresAt != nil {
+			pbEntitlement.ExpiresAt = timestamppb.New(*response.Entitlement.ExpiresAt)
+		}
+
+		pbResponse.Entitlement = pbEntitlement
+	}
+
+	return pbResponse, nil
+}
+
+// ListPricingZones retrieves all pricing zones
+func (s *PaymentService) ListPricingZones(ctx context.Context, req *paymentv1.ListPricingZonesRequest) (*paymentv1.ListPricingZonesResponse, error) {
+	// Get pricing zones from use case
+	zones, err := s.pricingZoneUseCase.ListPricingZones(ctx)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to list pricing zones: %v", err)
+	}
+
+	// Convert to protobuf
+	var pbZones []*paymentv1.PricingZone
+	for _, zone := range zones {
+		pbZone := &paymentv1.PricingZone{
+			Id:                zone.ID,
+			IsoCode:           zone.ISOCode,
+			Country:           zone.Country,
+			Zone:              zone.Zone,
+			ZoneName:          zone.ZoneName,
+			PricingMultiplier: zone.PricingMultiplier,
+			CreatedAt:         timestamppb.New(zone.CreatedAt),
+			UpdatedAt:         timestamppb.New(zone.UpdatedAt),
+		}
+		pbZones = append(pbZones, pbZone)
+	}
+
+	return &paymentv1.ListPricingZonesResponse{
+		PricingZones: pbZones,
 	}, nil
 }

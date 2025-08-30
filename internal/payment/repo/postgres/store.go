@@ -285,14 +285,93 @@ func (r *entitlementRepository) Check(ctx context.Context, userID, featureCode s
 
 // ListByUser retrieves all entitlements for a user
 func (r *entitlementRepository) ListByUser(ctx context.Context, userID string) ([]domain.Entitlement, error) {
-	// TODO: Implement with sqlc generated queries
-	return nil, fmt.Errorf("not implemented")
+	entitlements, err := r.store.queries.ListEntitlementsByUser(ctx, r.store.db, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list entitlements by user: %w", err)
+	}
+
+	var result []domain.Entitlement
+	for _, ent := range entitlements {
+		domainEnt := domain.Entitlement{
+			ID:          ent.ID.Bytes,
+			UserID:      ent.UserID,
+			FeatureCode: ent.FeatureCode,
+			PlanID:      uuid.MustParse(ent.PlanID),
+			Status:      ent.Status,
+			GrantedAt:   ent.GrantedAt.Time,
+			CreatedAt:   ent.CreatedAt.Time,
+			UpdatedAt:   ent.UpdatedAt.Time,
+		}
+
+		// Handle optional fields
+		if ent.FamilyID.Valid {
+			domainEnt.FamilyID = &ent.FamilyID.String
+		}
+		if ent.SubscriptionID.Valid {
+			domainEnt.SubscriptionID = &ent.SubscriptionID.String
+		}
+		if ent.ExpiresAt.Valid {
+			domainEnt.ExpiresAt = &ent.ExpiresAt.Time
+		}
+
+		result = append(result, domainEnt)
+	}
+
+	return result, nil
 }
 
 // Insert creates a new entitlement
 func (r *entitlementRepository) Insert(ctx context.Context, e domain.Entitlement) (domain.Entitlement, error) {
-	// TODO: Implement with sqlc generated queries
-	return domain.Entitlement{}, fmt.Errorf("not implemented")
+	params := pgstore.InsertEntitlementParams{
+		UserID:      e.UserID,
+		FeatureCode: e.FeatureCode,
+		PlanID:      e.PlanID.String(),
+		Status:      e.Status,
+		GrantedAt:   pgtype.Timestamp{Time: e.GrantedAt, Valid: true},
+		UsageLimits: []byte("{}"),
+		Metadata:    []byte("{}"),
+	}
+
+	// Handle optional fields
+	if e.FamilyID != nil {
+		params.FamilyID = pgtype.Text{String: *e.FamilyID, Valid: true}
+	}
+	if e.SubscriptionID != nil {
+		params.SubscriptionID = pgtype.Text{String: *e.SubscriptionID, Valid: true}
+	}
+	if e.ExpiresAt != nil {
+		params.ExpiresAt = pgtype.Timestamp{Time: *e.ExpiresAt, Valid: true}
+	}
+
+	entitlement, err := r.store.queries.InsertEntitlement(ctx, r.store.db, params)
+	if err != nil {
+		return domain.Entitlement{}, fmt.Errorf("failed to insert entitlement: %w", err)
+	}
+
+	// Convert back to domain model
+	result := domain.Entitlement{
+		ID:          entitlement.ID.Bytes,
+		UserID:      entitlement.UserID,
+		FeatureCode: entitlement.FeatureCode,
+		PlanID:      uuid.MustParse(entitlement.PlanID),
+		Status:      entitlement.Status,
+		GrantedAt:   entitlement.GrantedAt.Time,
+		CreatedAt:   entitlement.CreatedAt.Time,
+		UpdatedAt:   entitlement.UpdatedAt.Time,
+	}
+
+	// Handle optional fields
+	if entitlement.FamilyID.Valid {
+		result.FamilyID = &entitlement.FamilyID.String
+	}
+	if entitlement.SubscriptionID.Valid {
+		result.SubscriptionID = &entitlement.SubscriptionID.String
+	}
+	if entitlement.ExpiresAt.Valid {
+		result.ExpiresAt = &entitlement.ExpiresAt.Time
+	}
+
+	return result, nil
 }
 
 // UpdateStatus updates the status of an entitlement
@@ -409,7 +488,7 @@ func convertPricingZoneFromDB(dbZone *pgstore.PricingZone) domain.PricingZone {
 	}
 
 	return domain.PricingZone{
-		ID:                      string(dbZone.ID.Bytes[:]),
+		ID:                      uuid.UUID(dbZone.ID.Bytes).String(),
 		Country:                 dbZone.Country,
 		ISOCode:                 dbZone.IsoCode,
 		Zone:                    dbZone.Zone,

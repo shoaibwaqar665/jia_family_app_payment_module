@@ -135,14 +135,17 @@ func BootstrapAndServe(ctx context.Context) error {
 	paymentUseCase := usecase.NewPaymentUseCase(repo.Payment())
 	entitlementUseCase := usecase.NewEntitlementUseCase(repo.Entitlement(), cacheClient, entitlementPublisher)
 	checkoutUseCase := usecase.NewCheckoutUseCase(repo.Plan(), repo.Entitlement(), repo.PricingZone(), cacheClient, entitlementPublisher)
+	pricingZoneUseCase := usecase.NewPricingZoneUseCase(repo.PricingZone())
 
 	paymentService := transport.NewPaymentService(
 		cfg,
 		paymentUseCase,
 		entitlementUseCase,
 		checkoutUseCase,
+		pricingZoneUseCase,
 		cacheClient,
 		entitlementPublisher,
+		billingProvider,
 	)
 	log.Info(ctx, "Payment service initialized successfully")
 

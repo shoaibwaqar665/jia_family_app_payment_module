@@ -1,0 +1,596 @@
+/* Reset and Base Styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    line-height: 1.6;
+    color: #333;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* Header Styles */
+.header {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 15px;
+    padding: 20px 30px;
+    margin-bottom: 30px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+.logo h1 {
+    color: #4a5568;
+    font-size: 2rem;
+    margin-bottom: 5px;
+}
+
+.logo p {
+    color: #718096;
+    font-size: 0.9rem;
+}
+
+.user-info {
+    background: #e2e8f0;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    color: #4a5568;
+}
+
+/* Main Content */
+.main-content {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 15px;
+    padding: 40px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    margin-bottom: 30px;
+}
+
+/* Plans Section */
+.plans-section h2 {
+    text-align: center;
+    margin-bottom: 40px;
+    color: #2d3748;
+    font-size: 2.5rem;
+}
+
+.plans-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 30px;
+    margin-bottom: 40px;
+}
+
+.plan-card {
+    background: white;
+    border-radius: 15px;
+    padding: 30px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+    position: relative;
+    border: 2px solid transparent;
+}
+
+.plan-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+}
+
+.plan-card.popular {
+    border-color: #667eea;
+    transform: scale(1.05);
+}
+
+.popular-badge {
+    position: absolute;
+    top: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    padding: 5px 20px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.plan-header {
+    text-align: center;
+    margin-bottom: 25px;
+}
+
+.plan-header h3 {
+    font-size: 1.5rem;
+    color: #2d3748;
+    margin-bottom: 15px;
+}
+
+.plan-price {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 5px;
+}
+
+.currency {
+    font-size: 1.2rem;
+    color: #718096;
+}
+
+.amount {
+    font-size: 3rem;
+    font-weight: 700;
+    color: #2d3748;
+}
+
+.period {
+    font-size: 1rem;
+    color: #718096;
+}
+
+.plan-features ul {
+    list-style: none;
+    margin-bottom: 30px;
+}
+
+.plan-features li {
+    padding: 8px 0;
+    color: #4a5568;
+    font-size: 0.95rem;
+}
+
+.select-plan-btn {
+    width: 100%;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    border: none;
+    padding: 15px;
+    border-radius: 10px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.select-plan-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+/* Payment Section */
+.payment-section h2 {
+    text-align: center;
+    margin-bottom: 40px;
+    color: #2d3748;
+    font-size: 2.5rem;
+}
+
+.payment-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 40px;
+    align-items: start;
+}
+
+.selected-plan-info {
+    background: #f7fafc;
+    padding: 30px;
+    border-radius: 15px;
+    border: 2px solid #e2e8f0;
+}
+
+.selected-plan-info h3 {
+    color: #2d3748;
+    margin-bottom: 20px;
+    font-size: 1.5rem;
+}
+
+.plan-details {
+    space-y: 15px;
+}
+
+.detail-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.detail-row.total {
+    font-weight: 700;
+    font-size: 1.2rem;
+    color: #2d3748;
+    border-bottom: none;
+    border-top: 2px solid #e2e8f0;
+    margin-top: 10px;
+    padding-top: 15px;
+}
+
+.payment-form {
+    background: white;
+    padding: 30px;
+    border-radius: 15px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+.form-group {
+    margin-bottom: 25px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: #4a5568;
+}
+
+.form-group select,
+.form-group input {
+    width: 100%;
+    padding: 12px 15px;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 1rem;
+    transition: border-color 0.3s ease;
+}
+
+.form-group select:focus,
+.form-group input:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+.payment-methods {
+    margin-bottom: 30px;
+}
+
+.payment-methods h4 {
+    margin-bottom: 15px;
+    color: #4a5568;
+}
+
+.payment-method {
+    display: flex;
+    align-items: center;
+    padding: 15px;
+    border: 2px solid #e2e8f0;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.payment-method:hover {
+    border-color: #667eea;
+}
+
+.payment-method input[type="radio"] {
+    margin-right: 15px;
+    width: auto;
+}
+
+.payment-method label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    margin-bottom: 0;
+}
+
+.payment-icon {
+    margin-right: 10px;
+    font-size: 1.2rem;
+}
+
+.payment-actions {
+    display: flex;
+    gap: 15px;
+}
+
+.btn-primary,
+.btn-secondary {
+    flex: 1;
+    padding: 15px;
+    border: none;
+    border-radius: 10px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+.btn-secondary {
+    background: #e2e8f0;
+    color: #4a5568;
+}
+
+.btn-secondary:hover {
+    background: #cbd5e0;
+}
+
+/* Status Section */
+.status-section {
+    text-align: center;
+    padding: 60px 40px;
+}
+
+.status-container {
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+.status-icon {
+    font-size: 4rem;
+    margin-bottom: 20px;
+}
+
+.status-icon.success {
+    color: #48bb78;
+}
+
+.status-icon.error {
+    color: #f56565;
+}
+
+.status-icon.loading {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.status-title {
+    font-size: 2rem;
+    margin-bottom: 15px;
+    color: #2d3748;
+}
+
+.status-message {
+    font-size: 1.1rem;
+    color: #718096;
+    margin-bottom: 30px;
+}
+
+.status-details {
+    background: #f7fafc;
+    padding: 20px;
+    border-radius: 10px;
+    margin-bottom: 30px;
+    text-align: left;
+}
+
+.status-details h4 {
+    margin-bottom: 15px;
+    color: #4a5568;
+}
+
+.status-details p {
+    margin-bottom: 10px;
+    color: #718096;
+}
+
+/* Entitlements Section */
+.entitlements-section h2 {
+    text-align: center;
+    margin-bottom: 40px;
+    color: #2d3748;
+    font-size: 2.5rem;
+}
+
+.entitlements-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+}
+
+.entitlement-card {
+    background: white;
+    padding: 25px;
+    border-radius: 15px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    border-left: 4px solid #48bb78;
+}
+
+.entitlement-card h3 {
+    color: #2d3748;
+    margin-bottom: 15px;
+}
+
+.entitlement-details {
+    space-y: 10px;
+}
+
+.entitlement-details p {
+    margin-bottom: 8px;
+    color: #4a5568;
+}
+
+.entitlement-status {
+    display: inline-block;
+    background: #48bb78;
+    color: white;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin-top: 10px;
+}
+
+/* Footer */
+.footer {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 15px;
+    padding: 20px 30px;
+    text-align: center;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+.footer-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.footer-links {
+    display: flex;
+    gap: 20px;
+}
+
+.footer-links a {
+    color: #667eea;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.footer-links a:hover {
+    text-decoration: underline;
+}
+
+/* Loading Overlay */
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.loading-spinner {
+    width: 50px;
+    height: 50px;
+    border: 5px solid #f3f3f3;
+    border-top: 5px solid #667eea;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 20px;
+}
+
+.loading-overlay p {
+    color: white;
+    font-size: 1.2rem;
+}
+
+/* Toast Notifications */
+.toast-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1001;
+}
+
+.toast {
+    background: white;
+    padding: 15px 20px;
+    border-radius: 10px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    margin-bottom: 10px;
+    border-left: 4px solid #48bb78;
+    animation: slideIn 0.3s ease;
+}
+
+.toast.error {
+    border-left-color: #f56565;
+}
+
+.toast.warning {
+    border-left-color: #ed8936;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .container {
+        padding: 10px;
+    }
+    
+    .header {
+        flex-direction: column;
+        gap: 15px;
+        text-align: center;
+    }
+    
+    .main-content {
+        padding: 20px;
+    }
+    
+    .payment-container {
+        grid-template-columns: 1fr;
+        gap: 20px;
+    }
+    
+    .plans-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .plan-card.popular {
+        transform: none;
+    }
+    
+    .footer-content {
+        flex-direction: column;
+        gap: 15px;
+    }
+}
+
+/* Stripe Elements Styling */
+.StripeElement {
+    background-color: white;
+    padding: 12px 15px;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    transition: border-color 0.3s ease;
+}
+
+.StripeElement--focus {
+    border-color: #667eea;
+}
+
+.StripeElement--invalid {
+    border-color: #f56565;
+}
+
+.StripeElement--complete {
+    border-color: #48bb78;
+}
