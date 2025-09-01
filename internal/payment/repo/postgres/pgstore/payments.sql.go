@@ -29,20 +29,20 @@ INSERT INTO payments (
     $1, $2, $3, $4,
     $5, $6, $7, $8,
     $9, $10
-) RETURNING id, amount, currency, status, payment_method, customer_id, order_id, description, external_payment_id, failure_reason, metadata, created_at, updated_at
+) RETURNING id, currency, status, payment_method, customer_id, order_id, description, external_payment_id, failure_reason, metadata, created_at, updated_at, amount
 `
 
 type CreatePaymentParams struct {
-	Amount            int32       `json:"amount"`
-	Currency          string      `json:"currency"`
-	Status            string      `json:"status"`
-	PaymentMethod     string      `json:"payment_method"`
-	CustomerID        string      `json:"customer_id"`
-	OrderID           string      `json:"order_id"`
-	Description       pgtype.Text `json:"description"`
-	ExternalPaymentID pgtype.Text `json:"external_payment_id"`
-	FailureReason     pgtype.Text `json:"failure_reason"`
-	Metadata          []byte      `json:"metadata"`
+	Amount            pgtype.Numeric `json:"amount"`
+	Currency          string         `json:"currency"`
+	Status            string         `json:"status"`
+	PaymentMethod     string         `json:"payment_method"`
+	CustomerID        string         `json:"customer_id"`
+	OrderID           string         `json:"order_id"`
+	Description       pgtype.Text    `json:"description"`
+	ExternalPaymentID pgtype.Text    `json:"external_payment_id"`
+	FailureReason     pgtype.Text    `json:"failure_reason"`
+	Metadata          []byte         `json:"metadata"`
 }
 
 func (q *Queries) CreatePayment(ctx context.Context, db DBTX, arg CreatePaymentParams) (*Payment, error) {
@@ -61,7 +61,6 @@ func (q *Queries) CreatePayment(ctx context.Context, db DBTX, arg CreatePaymentP
 	var i Payment
 	err := row.Scan(
 		&i.ID,
-		&i.Amount,
 		&i.Currency,
 		&i.Status,
 		&i.PaymentMethod,
@@ -73,6 +72,7 @@ func (q *Queries) CreatePayment(ctx context.Context, db DBTX, arg CreatePaymentP
 		&i.Metadata,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Amount,
 	)
 	return &i, err
 }
@@ -87,7 +87,7 @@ func (q *Queries) DeletePayment(ctx context.Context, db DBTX, id pgtype.UUID) er
 }
 
 const GetPaymentByID = `-- name: GetPaymentByID :one
-SELECT id, amount, currency, status, payment_method, customer_id, order_id, description, external_payment_id, failure_reason, metadata, created_at, updated_at FROM payments WHERE id = $1
+SELECT id, currency, status, payment_method, customer_id, order_id, description, external_payment_id, failure_reason, metadata, created_at, updated_at, amount FROM payments WHERE id = $1
 `
 
 func (q *Queries) GetPaymentByID(ctx context.Context, db DBTX, id pgtype.UUID) (*Payment, error) {
@@ -95,7 +95,6 @@ func (q *Queries) GetPaymentByID(ctx context.Context, db DBTX, id pgtype.UUID) (
 	var i Payment
 	err := row.Scan(
 		&i.ID,
-		&i.Amount,
 		&i.Currency,
 		&i.Status,
 		&i.PaymentMethod,
@@ -107,12 +106,13 @@ func (q *Queries) GetPaymentByID(ctx context.Context, db DBTX, id pgtype.UUID) (
 		&i.Metadata,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Amount,
 	)
 	return &i, err
 }
 
 const GetPaymentByOrderID = `-- name: GetPaymentByOrderID :one
-SELECT id, amount, currency, status, payment_method, customer_id, order_id, description, external_payment_id, failure_reason, metadata, created_at, updated_at FROM payments WHERE order_id = $1
+SELECT id, currency, status, payment_method, customer_id, order_id, description, external_payment_id, failure_reason, metadata, created_at, updated_at, amount FROM payments WHERE order_id = $1
 `
 
 func (q *Queries) GetPaymentByOrderID(ctx context.Context, db DBTX, orderID string) (*Payment, error) {
@@ -120,7 +120,6 @@ func (q *Queries) GetPaymentByOrderID(ctx context.Context, db DBTX, orderID stri
 	var i Payment
 	err := row.Scan(
 		&i.ID,
-		&i.Amount,
 		&i.Currency,
 		&i.Status,
 		&i.PaymentMethod,
@@ -132,12 +131,13 @@ func (q *Queries) GetPaymentByOrderID(ctx context.Context, db DBTX, orderID stri
 		&i.Metadata,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Amount,
 	)
 	return &i, err
 }
 
 const GetPaymentsByCustomerID = `-- name: GetPaymentsByCustomerID :many
-SELECT id, amount, currency, status, payment_method, customer_id, order_id, description, external_payment_id, failure_reason, metadata, created_at, updated_at FROM payments 
+SELECT id, currency, status, payment_method, customer_id, order_id, description, external_payment_id, failure_reason, metadata, created_at, updated_at, amount FROM payments 
 WHERE customer_id = $1
 ORDER BY created_at DESC
 `
@@ -153,7 +153,6 @@ func (q *Queries) GetPaymentsByCustomerID(ctx context.Context, db DBTX, customer
 		var i Payment
 		if err := rows.Scan(
 			&i.ID,
-			&i.Amount,
 			&i.Currency,
 			&i.Status,
 			&i.PaymentMethod,
@@ -165,6 +164,7 @@ func (q *Queries) GetPaymentsByCustomerID(ctx context.Context, db DBTX, customer
 			&i.Metadata,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Amount,
 		); err != nil {
 			return nil, err
 		}
@@ -177,7 +177,7 @@ func (q *Queries) GetPaymentsByCustomerID(ctx context.Context, db DBTX, customer
 }
 
 const ListPayments = `-- name: ListPayments :many
-SELECT id, amount, currency, status, payment_method, customer_id, order_id, description, external_payment_id, failure_reason, metadata, created_at, updated_at FROM payments 
+SELECT id, currency, status, payment_method, customer_id, order_id, description, external_payment_id, failure_reason, metadata, created_at, updated_at, amount FROM payments 
 ORDER BY created_at DESC
 `
 
@@ -192,7 +192,6 @@ func (q *Queries) ListPayments(ctx context.Context, db DBTX) ([]*Payment, error)
 		var i Payment
 		if err := rows.Scan(
 			&i.ID,
-			&i.Amount,
 			&i.Currency,
 			&i.Status,
 			&i.PaymentMethod,
@@ -204,6 +203,7 @@ func (q *Queries) ListPayments(ctx context.Context, db DBTX) ([]*Payment, error)
 			&i.Metadata,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Amount,
 		); err != nil {
 			return nil, err
 		}
@@ -229,21 +229,21 @@ SET amount = $1,
     metadata = $10,
     updated_at = NOW()
 WHERE id = $11
-RETURNING id, amount, currency, status, payment_method, customer_id, order_id, description, external_payment_id, failure_reason, metadata, created_at, updated_at
+RETURNING id, currency, status, payment_method, customer_id, order_id, description, external_payment_id, failure_reason, metadata, created_at, updated_at, amount
 `
 
 type UpdatePaymentParams struct {
-	Amount            int32       `json:"amount"`
-	Currency          string      `json:"currency"`
-	Status            string      `json:"status"`
-	PaymentMethod     string      `json:"payment_method"`
-	CustomerID        string      `json:"customer_id"`
-	OrderID           string      `json:"order_id"`
-	Description       pgtype.Text `json:"description"`
-	ExternalPaymentID pgtype.Text `json:"external_payment_id"`
-	FailureReason     pgtype.Text `json:"failure_reason"`
-	Metadata          []byte      `json:"metadata"`
-	ID                pgtype.UUID `json:"id"`
+	Amount            pgtype.Numeric `json:"amount"`
+	Currency          string         `json:"currency"`
+	Status            string         `json:"status"`
+	PaymentMethod     string         `json:"payment_method"`
+	CustomerID        string         `json:"customer_id"`
+	OrderID           string         `json:"order_id"`
+	Description       pgtype.Text    `json:"description"`
+	ExternalPaymentID pgtype.Text    `json:"external_payment_id"`
+	FailureReason     pgtype.Text    `json:"failure_reason"`
+	Metadata          []byte         `json:"metadata"`
+	ID                pgtype.UUID    `json:"id"`
 }
 
 func (q *Queries) UpdatePayment(ctx context.Context, db DBTX, arg UpdatePaymentParams) (*Payment, error) {
@@ -263,7 +263,6 @@ func (q *Queries) UpdatePayment(ctx context.Context, db DBTX, arg UpdatePaymentP
 	var i Payment
 	err := row.Scan(
 		&i.ID,
-		&i.Amount,
 		&i.Currency,
 		&i.Status,
 		&i.PaymentMethod,
@@ -275,6 +274,7 @@ func (q *Queries) UpdatePayment(ctx context.Context, db DBTX, arg UpdatePaymentP
 		&i.Metadata,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Amount,
 	)
 	return &i, err
 }
@@ -285,7 +285,7 @@ SET status = $1,
     failure_reason = $2,
     updated_at = NOW()
 WHERE id = $3
-RETURNING id, amount, currency, status, payment_method, customer_id, order_id, description, external_payment_id, failure_reason, metadata, created_at, updated_at
+RETURNING id, currency, status, payment_method, customer_id, order_id, description, external_payment_id, failure_reason, metadata, created_at, updated_at, amount
 `
 
 type UpdatePaymentStatusParams struct {
@@ -299,7 +299,6 @@ func (q *Queries) UpdatePaymentStatus(ctx context.Context, db DBTX, arg UpdatePa
 	var i Payment
 	err := row.Scan(
 		&i.ID,
-		&i.Amount,
 		&i.Currency,
 		&i.Status,
 		&i.PaymentMethod,
@@ -311,6 +310,7 @@ func (q *Queries) UpdatePaymentStatus(ctx context.Context, db DBTX, arg UpdatePa
 		&i.Metadata,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Amount,
 	)
 	return &i, err
 }

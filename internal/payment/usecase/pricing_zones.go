@@ -28,15 +28,15 @@ func NewPricingZoneUseCase(pricingZoneRepo repo.PricingZoneRepository) *PricingZ
 func (uc *PricingZoneUseCase) GetPricingZoneByISOCode(ctx context.Context, isoCode string) (*domain.PricingZone, error) {
 	// Normalize ISO code to uppercase
 	isoCode = strings.ToUpper(strings.TrimSpace(isoCode))
-	
+
 	if isoCode == "" {
 		return nil, fmt.Errorf("ISO code is required")
 	}
 
 	zone, err := uc.pricingZoneRepo.GetByISOCode(ctx, isoCode)
 	if err != nil {
-		log.Error(ctx, "Failed to get pricing zone by ISO code", 
-			zap.String("iso_code", isoCode), 
+		log.Error(ctx, "Failed to get pricing zone by ISO code",
+			zap.String("iso_code", isoCode),
 			zap.Error(err))
 		return nil, fmt.Errorf("failed to get pricing zone: %w", err)
 	}
@@ -47,15 +47,15 @@ func (uc *PricingZoneUseCase) GetPricingZoneByISOCode(ctx context.Context, isoCo
 // GetPricingZoneByCountry retrieves a pricing zone by country name
 func (uc *PricingZoneUseCase) GetPricingZoneByCountry(ctx context.Context, country string) (*domain.PricingZone, error) {
 	country = strings.TrimSpace(country)
-	
+
 	if country == "" {
 		return nil, fmt.Errorf("country name is required")
 	}
 
 	zone, err := uc.pricingZoneRepo.GetByCountry(ctx, country)
 	if err != nil {
-		log.Error(ctx, "Failed to get pricing zone by country", 
-			zap.String("country", country), 
+		log.Error(ctx, "Failed to get pricing zone by country",
+			zap.String("country", country),
 			zap.Error(err))
 		return nil, fmt.Errorf("failed to get pricing zone: %w", err)
 	}
@@ -78,11 +78,11 @@ func (uc *PricingZoneUseCase) CalculateAdjustedPrice(ctx context.Context, req do
 	}
 
 	if err != nil {
-		log.Warn(ctx, "Pricing zone not found, using default premium pricing", 
+		log.Warn(ctx, "Pricing zone not found, using default premium pricing",
 			zap.String("iso_code", req.ISOCode),
 			zap.String("country", req.Country),
 			zap.Error(err))
-		
+
 		// Use default premium pricing if zone not found
 		zone = domain.PricingZone{
 			Zone:              "A",
@@ -106,8 +106,8 @@ func (uc *PricingZoneUseCase) CalculateAdjustedPrice(ctx context.Context, req do
 		zap.String("zone", zone.Zone),
 		zap.String("zone_name", zone.ZoneName),
 		zap.Float64("multiplier", zone.PricingMultiplier),
-		zap.Int64("base_price", req.BasePrice),
-		zap.Int64("adjusted_price", adjustedPrice))
+		zap.Float64("base_price", req.BasePrice),
+		zap.Float64("adjusted_price", adjustedPrice))
 
 	return response, nil
 }
@@ -126,15 +126,15 @@ func (uc *PricingZoneUseCase) ListPricingZones(ctx context.Context) ([]domain.Pr
 // GetPricingZonesByZone retrieves all pricing zones for a specific zone type
 func (uc *PricingZoneUseCase) GetPricingZonesByZone(ctx context.Context, zone string) ([]domain.PricingZone, error) {
 	zone = strings.ToUpper(strings.TrimSpace(zone))
-	
+
 	if !domain.IsValidZone(zone) {
 		return nil, fmt.Errorf("invalid zone type: %s", zone)
 	}
 
 	zones, err := uc.pricingZoneRepo.GetByZone(ctx, zone)
 	if err != nil {
-		log.Error(ctx, "Failed to get pricing zones by zone", 
-			zap.String("zone", zone), 
+		log.Error(ctx, "Failed to get pricing zones by zone",
+			zap.String("zone", zone),
 			zap.Error(err))
 		return nil, fmt.Errorf("failed to get pricing zones: %w", err)
 	}
@@ -170,7 +170,7 @@ func (uc *PricingZoneUseCase) UpsertPricingZone(ctx context.Context, zone domain
 
 	savedZone, err := uc.pricingZoneRepo.Upsert(ctx, zone)
 	if err != nil {
-		log.Error(ctx, "Failed to upsert pricing zone", 
+		log.Error(ctx, "Failed to upsert pricing zone",
 			zap.String("iso_code", zone.ISOCode),
 			zap.Error(err))
 		return nil, fmt.Errorf("failed to upsert pricing zone: %w", err)
@@ -219,7 +219,7 @@ func (uc *PricingZoneUseCase) BulkUpsertPricingZones(ctx context.Context, zones 
 
 	err := uc.pricingZoneRepo.BulkUpsert(ctx, zones)
 	if err != nil {
-		log.Error(ctx, "Failed to bulk upsert pricing zones", 
+		log.Error(ctx, "Failed to bulk upsert pricing zones",
 			zap.Int("count", len(zones)),
 			zap.Error(err))
 		return fmt.Errorf("failed to bulk upsert pricing zones: %w", err)
@@ -234,14 +234,14 @@ func (uc *PricingZoneUseCase) BulkUpsertPricingZones(ctx context.Context, zones 
 // DeletePricingZone deletes a pricing zone by ISO code
 func (uc *PricingZoneUseCase) DeletePricingZone(ctx context.Context, isoCode string) error {
 	isoCode = strings.ToUpper(strings.TrimSpace(isoCode))
-	
+
 	if isoCode == "" {
 		return fmt.Errorf("ISO code is required")
 	}
 
 	err := uc.pricingZoneRepo.Delete(ctx, isoCode)
 	if err != nil {
-		log.Error(ctx, "Failed to delete pricing zone", 
+		log.Error(ctx, "Failed to delete pricing zone",
 			zap.String("iso_code", isoCode),
 			zap.Error(err))
 		return fmt.Errorf("failed to delete pricing zone: %w", err)

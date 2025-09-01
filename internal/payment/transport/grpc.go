@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -17,6 +18,7 @@ import (
 	"github.com/jia-app/paymentservice/internal/shared/cache"
 	"github.com/jia-app/paymentservice/internal/shared/config"
 	"github.com/jia-app/paymentservice/internal/shared/events"
+	"github.com/jia-app/paymentservice/internal/shared/log"
 )
 
 // PaymentService provides payment business logic and implements PaymentServiceServer
@@ -203,12 +205,33 @@ func (s *PaymentService) CreateCheckoutSession(ctx context.Context, req *payment
 		return nil, status.Error(codes.InvalidArgument, "invalid plan_id")
 	}
 
-	// Prepare billing request
+	// Calculate adjusted price based on country code
+	adjustedPrice := req.BasePrice
+	if req.CountryCode != "" {
+		// Get pricing zone for the country
+		pricingZone, err := s.pricingZoneUseCase.GetPricingZoneByISOCode(ctx, req.CountryCode)
+		if err == nil {
+			adjustedPrice = pricingZone.CalculateAdjustedPrice(req.BasePrice)
+			log.Info(ctx, "Applied dynamic pricing for checkout",
+				zap.String("country_code", req.CountryCode),
+				zap.String("zone", pricingZone.Zone),
+				zap.String("zone_name", pricingZone.ZoneName),
+				zap.Float64("multiplier", pricingZone.PricingMultiplier),
+				zap.Float64("base_price", req.BasePrice),
+				zap.Float64("adjusted_price", adjustedPrice))
+		} else {
+			log.Warn(ctx, "Pricing zone not found for checkout, using base price",
+				zap.String("country_code", req.CountryCode),
+				zap.Error(err))
+		}
+	}
+
+	// Prepare billing request with adjusted price
 	billingReq := billing.CreateCheckoutSessionRequest{
 		PlanID:      planID,
 		UserID:      req.UserId,
 		CountryCode: req.CountryCode,
-		BasePrice:   req.BasePrice,
+		BasePrice:   adjustedPrice, // Use adjusted price instead of base price
 		Currency:    req.Currency,
 		SuccessURL:  req.SuccessUrl,
 		CancelURL:   req.CancelUrl,
@@ -225,9 +248,9 @@ func (s *PaymentService) CreateCheckoutSession(ctx context.Context, req *payment
 		return nil, status.Errorf(codes.Internal, "failed to create checkout session: %v", err)
 	}
 
-	// Create a payment record in the database
+	// Create a payment record in the database with adjusted price
 	paymentReq := &domain.PaymentRequest{
-		Amount:        req.BasePrice,
+		Amount:        adjustedPrice, // Use adjusted price for payment record
 		Currency:      req.Currency,
 		PaymentMethod: "credit_card",
 		CustomerID:    req.UserId,

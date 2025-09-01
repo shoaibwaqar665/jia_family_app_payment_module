@@ -41,7 +41,7 @@ service PaymentService {
 
 // CreatePaymentRequest represents a request to create a payment
 message CreatePaymentRequest {
-  int64 amount = 1;           // Amount in cents
+  double amount = 1;           // Amount in dollars
   string currency = 2;        // Currency code (e.g., USD, EUR)
   string payment_method = 3;  // Payment method
   string customer_id = 4;     // Customer identifier
@@ -103,7 +103,7 @@ message ListPaymentsResponse {
 // Payment represents a payment transaction
 message Payment {
   string id = 1;                    // Payment identifier
-  int64 amount = 2;                 // Amount in cents
+  double amount = 2;                 // Amount in dollars
   string currency = 3;              // Currency code
   string status = 4;                // Payment status
   string payment_method = 5;        // Payment method
@@ -139,7 +139,7 @@ message CreateCheckoutSessionRequest {
   string user_id = 2;           // User identifier
   string family_id = 3;         // Family identifier (optional)
   string country_code = 4;      // Country code for pricing
-  int64 base_price = 5;         // Base price in cents
+  double base_price = 5;         // Base price in dollars
   string currency = 6;          // Currency code
   string success_url = 7;       // Success redirect URL
   string cancel_url = 8;        // Cancel redirect URL

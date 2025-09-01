@@ -26,7 +26,6 @@ type Entitlement struct {
 
 type Payment struct {
 	ID                pgtype.UUID      `json:"id"`
-	Amount            int32            `json:"amount"`
 	Currency          string           `json:"currency"`
 	Status            string           `json:"status"`
 	PaymentMethod     string           `json:"payment_method"`
@@ -38,6 +37,8 @@ type Payment struct {
 	Metadata          []byte           `json:"metadata"`
 	CreatedAt         pgtype.Timestamp `json:"created_at"`
 	UpdatedAt         pgtype.Timestamp `json:"updated_at"`
+	// Amount in dollars (e.g., 19.99)
+	Amount pgtype.Numeric `json:"amount"`
 }
 
 type Plan struct {

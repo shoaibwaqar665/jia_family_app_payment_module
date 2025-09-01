@@ -140,7 +140,7 @@ func (PaymentMethod) EnumDescriptor() ([]byte, []int) {
 // CreatePaymentRequest represents a request to create a payment
 type CreatePaymentRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Amount        int64                  `protobuf:"varint,1,opt,name=amount,proto3" json:"amount,omitempty"`                                   // Amount in cents
+	Amount        float64                `protobuf:"fixed64,1,opt,name=amount,proto3" json:"amount,omitempty"`                                  // Amount in dollars
 	Currency      string                 `protobuf:"bytes,2,opt,name=currency,proto3" json:"currency,omitempty"`                                // Currency code (e.g., USD, EUR)
 	PaymentMethod string                 `protobuf:"bytes,3,opt,name=payment_method,json=paymentMethod,proto3" json:"payment_method,omitempty"` // Payment method
 	CustomerId    string                 `protobuf:"bytes,4,opt,name=customer_id,json=customerId,proto3" json:"customer_id,omitempty"`          // Customer identifier
@@ -180,7 +180,7 @@ func (*CreatePaymentRequest) Descriptor() ([]byte, []int) {
 	return file_api_payment_v1_payment_service_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *CreatePaymentRequest) GetAmount() int64 {
+func (x *CreatePaymentRequest) GetAmount() float64 {
 	if x != nil {
 		return x.Amount
 	}
@@ -679,7 +679,7 @@ func (x *ListPaymentsResponse) GetTotal() int32 {
 type Payment struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`                                            // Payment identifier
-	Amount        int64                  `protobuf:"varint,2,opt,name=amount,proto3" json:"amount,omitempty"`                                   // Amount in cents
+	Amount        float64                `protobuf:"fixed64,2,opt,name=amount,proto3" json:"amount,omitempty"`                                  // Amount in dollars
 	Currency      string                 `protobuf:"bytes,3,opt,name=currency,proto3" json:"currency,omitempty"`                                // Currency code
 	Status        string                 `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`                                    // Payment status
 	PaymentMethod string                 `protobuf:"bytes,5,opt,name=payment_method,json=paymentMethod,proto3" json:"payment_method,omitempty"` // Payment method
@@ -729,7 +729,7 @@ func (x *Payment) GetId() string {
 	return ""
 }
 
-func (x *Payment) GetAmount() int64 {
+func (x *Payment) GetAmount() float64 {
 	if x != nil {
 		return x.Amount
 	}
@@ -799,7 +799,7 @@ type CreateCheckoutSessionRequest struct {
 	UserId        string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`                // User identifier
 	FamilyId      string                 `protobuf:"bytes,3,opt,name=family_id,json=familyId,proto3" json:"family_id,omitempty"`          // Family identifier (optional)
 	CountryCode   string                 `protobuf:"bytes,4,opt,name=country_code,json=countryCode,proto3" json:"country_code,omitempty"` // Country code for pricing
-	BasePrice     int64                  `protobuf:"varint,5,opt,name=base_price,json=basePrice,proto3" json:"base_price,omitempty"`      // Base price in cents
+	BasePrice     float64                `protobuf:"fixed64,5,opt,name=base_price,json=basePrice,proto3" json:"base_price,omitempty"`     // Base price in dollars
 	Currency      string                 `protobuf:"bytes,6,opt,name=currency,proto3" json:"currency,omitempty"`                          // Currency code
 	SuccessUrl    string                 `protobuf:"bytes,7,opt,name=success_url,json=successUrl,proto3" json:"success_url,omitempty"`    // Success redirect URL
 	CancelUrl     string                 `protobuf:"bytes,8,opt,name=cancel_url,json=cancelUrl,proto3" json:"cancel_url,omitempty"`       // Cancel redirect URL
@@ -865,7 +865,7 @@ func (x *CreateCheckoutSessionRequest) GetCountryCode() string {
 	return ""
 }
 
-func (x *CreateCheckoutSessionRequest) GetBasePrice() int64 {
+func (x *CreateCheckoutSessionRequest) GetBasePrice() float64 {
 	if x != nil {
 		return x.BasePrice
 	}
@@ -1603,7 +1603,7 @@ const file_api_payment_v1_payment_service_proto_rawDesc = "" +
 	"$api/payment/v1/payment_service.proto\x12\n" +
 	"payment.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xcf\x01\n" +
 	"\x14CreatePaymentRequest\x12\x16\n" +
-	"\x06amount\x18\x01 \x01(\x03R\x06amount\x12\x1a\n" +
+	"\x06amount\x18\x01 \x01(\x01R\x06amount\x12\x1a\n" +
 	"\bcurrency\x18\x02 \x01(\tR\bcurrency\x12%\n" +
 	"\x0epayment_method\x18\x03 \x01(\tR\rpaymentMethod\x12\x1f\n" +
 	"\vcustomer_id\x18\x04 \x01(\tR\n" +
@@ -1637,7 +1637,7 @@ const file_api_payment_v1_payment_service_proto_rawDesc = "" +
 	"\x05total\x18\x02 \x01(\x05R\x05total\"\xe0\x02\n" +
 	"\aPayment\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
-	"\x06amount\x18\x02 \x01(\x03R\x06amount\x12\x1a\n" +
+	"\x06amount\x18\x02 \x01(\x01R\x06amount\x12\x1a\n" +
 	"\bcurrency\x18\x03 \x01(\tR\bcurrency\x12\x16\n" +
 	"\x06status\x18\x04 \x01(\tR\x06status\x12%\n" +
 	"\x0epayment_method\x18\x05 \x01(\tR\rpaymentMethod\x12\x1f\n" +
@@ -1656,7 +1656,7 @@ const file_api_payment_v1_payment_service_proto_rawDesc = "" +
 	"\tfamily_id\x18\x03 \x01(\tR\bfamilyId\x12!\n" +
 	"\fcountry_code\x18\x04 \x01(\tR\vcountryCode\x12\x1d\n" +
 	"\n" +
-	"base_price\x18\x05 \x01(\x03R\tbasePrice\x12\x1a\n" +
+	"base_price\x18\x05 \x01(\x01R\tbasePrice\x12\x1a\n" +
 	"\bcurrency\x18\x06 \x01(\tR\bcurrency\x12\x1f\n" +
 	"\vsuccess_url\x18\a \x01(\tR\n" +
 	"successUrl\x12\x1d\n" +

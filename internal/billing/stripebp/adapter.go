@@ -44,7 +44,7 @@ func (a *Adapter) CreateCheckoutSession(ctx context.Context, req billing.CreateC
 					Name:        stripe.String("Subscription Plan"),
 					Description: stripe.String(fmt.Sprintf("Plan ID: %s", req.PlanID.String())),
 				},
-				UnitAmount: stripe.Int64(req.BasePrice),
+				UnitAmount: stripe.Int64(int64(req.BasePrice * 100)), // Convert dollars to cents for Stripe
 			},
 			Quantity: stripe.Int64(1),
 		},
@@ -54,7 +54,7 @@ func (a *Adapter) CreateCheckoutSession(ctx context.Context, req billing.CreateC
 	metadata := map[string]string{
 		"user_id":    req.UserID,
 		"plan_id":    req.PlanID.String(),
-		"base_price": fmt.Sprintf("%d", req.BasePrice),
+		"base_price": fmt.Sprintf("%.2f", req.BasePrice), // Store as dollars in metadata
 		"currency":   req.Currency,
 	}
 
@@ -220,9 +220,9 @@ func (a *Adapter) handleCheckoutSessionCompleted(event stripe.Event) (*billing.W
 		planID = uuid.NewSHA1(uuid.NameSpaceOID, []byte(planIDStr))
 	}
 
-	basePrice := int64(1999) // Default
+	basePrice := float64(19.99) // Default in dollars
 	if basePriceStr != "" {
-		if p, err := fmt.Sscanf(basePriceStr, "%d", &basePrice); err != nil || p != 1 {
+		if p, err := fmt.Sscanf(basePriceStr, "%f", &basePrice); err != nil || p != 1 {
 			a.logger.Warn("Invalid base_price in metadata, using default", zap.String("base_price", basePriceStr))
 		}
 	}
@@ -279,7 +279,7 @@ func (a *Adapter) handlePaymentSucceeded(event stripe.Event) (*billing.WebhookRe
 		UserID:      "unknown",        // Would need to be extracted from metadata
 		FeatureCode: "premium_feature",
 		PlanID:      uuid.New(),
-		Amount:      paymentIntent.Amount,
+		Amount:      float64(paymentIntent.Amount) / 100.0, // Convert cents to dollars
 		Currency:    string(paymentIntent.Currency),
 		Status:      "completed",
 		ExpiresAt:   nil,
@@ -310,7 +310,7 @@ func (a *Adapter) handlePaymentFailed(event stripe.Event) (*billing.WebhookResul
 		UserID:      "unknown",
 		FeatureCode: "premium_feature",
 		PlanID:      uuid.New(),
-		Amount:      paymentIntent.Amount,
+		Amount:      float64(paymentIntent.Amount) / 100.0, // Convert cents to dollars
 		Currency:    string(paymentIntent.Currency),
 		Status:      "failed",
 		ExpiresAt:   nil,

@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
@@ -22,14 +23,14 @@ const (
 )
 
 type CheckoutRequest struct {
-	PlanID      string `json:"plan_id"`
-	UserID      string `json:"user_id"`
-	FamilyID    string `json:"family_id,omitempty"`
-	CountryCode string `json:"country_code"`
-	BasePrice   int64  `json:"base_price"`
-	Currency    string `json:"currency"`
-	SuccessURL  string `json:"success_url"`
-	CancelURL   string `json:"cancel_url"`
+	PlanID      string  `json:"plan_id"`
+	UserID      string  `json:"user_id"`
+	FamilyID    string  `json:"family_id,omitempty"`
+	CountryCode string  `json:"country_code"`
+	BasePrice   float64 `json:"base_price"`
+	Currency    string  `json:"currency"`
+	SuccessURL  string  `json:"success_url"`
+	CancelURL   string  `json:"cancel_url"`
 }
 
 type CheckoutResponse struct {
@@ -104,9 +105,19 @@ func handleCheckout(w http.ResponseWriter, r *http.Request, client paymentv1.Pay
 		return
 	}
 
+	// Convert string plan ID to deterministic UUID (same logic as backend)
+	planID := req.PlanID
+	if parsedUUID, err := uuid.Parse(req.PlanID); err != nil {
+		// It's a string plan ID, generate a deterministic UUID
+		planID = uuid.NewSHA1(uuid.NameSpaceOID, []byte(req.PlanID)).String()
+	} else {
+		// It's already a UUID
+		planID = parsedUUID.String()
+	}
+
 	// Convert to gRPC request
 	grpcReq := &paymentv1.CreateCheckoutSessionRequest{
-		PlanId:      req.PlanID,
+		PlanId:      planID,
 		UserId:      req.UserID,
 		FamilyId:    req.FamilyID,
 		CountryCode: req.CountryCode,

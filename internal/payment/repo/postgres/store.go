@@ -88,7 +88,7 @@ type paymentRepository struct {
 // Create creates a new payment
 func (r *paymentRepository) Create(ctx context.Context, payment *domain.Payment) error {
 	params := pgstore.CreatePaymentParams{
-		Amount:            int32(payment.Amount),
+		Amount:            pgtype.Numeric{Int: big.NewInt(int64(payment.Amount * 100)), Valid: true}, // Convert dollars to cents for pgtype.Numeric
 		Currency:          payment.Currency,
 		Status:            payment.Status,
 		PaymentMethod:     payment.PaymentMethod,
@@ -168,7 +168,7 @@ func (r *paymentRepository) GetByCustomerID(ctx context.Context, customerID stri
 func (r *paymentRepository) Update(ctx context.Context, payment *domain.Payment) error {
 	params := pgstore.UpdatePaymentParams{
 		ID:                pgtype.UUID{Bytes: payment.ID, Valid: true},
-		Amount:            int32(payment.Amount),
+		Amount:            pgtype.Numeric{Int: big.NewInt(int64(payment.Amount * 100)), Valid: true}, // Convert dollars to cents for pgtype.Numeric
 		Currency:          payment.Currency,
 		Status:            payment.Status,
 		PaymentMethod:     payment.PaymentMethod,
@@ -562,9 +562,17 @@ func convertPaymentFromDB(dbPayment *pgstore.Payment) *domain.Payment {
 		updatedAt = dbPayment.UpdatedAt.Time
 	}
 
+	// Convert pgtype.Numeric to float64 (dollars)
+	var amount float64
+	if dbPayment.Amount.Valid {
+		if val, err := dbPayment.Amount.Float64Value(); err == nil {
+			amount = val.Float64 / 100.0 // Convert cents back to dollars
+		}
+	}
+
 	return &domain.Payment{
 		ID:                dbPayment.ID.Bytes,
-		Amount:            int64(dbPayment.Amount),
+		Amount:            amount,
 		Currency:          dbPayment.Currency,
 		Status:            dbPayment.Status,
 		PaymentMethod:     dbPayment.PaymentMethod,

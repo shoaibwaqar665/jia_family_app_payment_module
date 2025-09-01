@@ -10,7 +10,7 @@ import (
 // Payment represents a payment transaction
 type Payment struct {
 	ID                uuid.UUID `json:"id"`
-	Amount            int64     `json:"amount"` // Amount in cents
+	Amount            float64   `json:"amount"` // Amount in dollars
 	Currency          string    `json:"currency"`
 	Status            string    `json:"status"`
 	PaymentMethod     string    `json:"payment_method"`
@@ -47,18 +47,18 @@ const (
 
 // PaymentRequest represents a request to create a payment
 type PaymentRequest struct {
-	Amount        int64  `json:"amount" validate:"required,gt=0"`
-	Currency      string `json:"currency" validate:"required,len=3"`
-	PaymentMethod string `json:"payment_method" validate:"required"`
-	CustomerID    string `json:"customer_id" validate:"required"`
-	OrderID       string `json:"order_id" validate:"required"`
-	Description   string `json:"description"`
+	Amount        float64 `json:"amount" validate:"required,gt=0"`
+	Currency      string  `json:"currency" validate:"required,len=3"`
+	PaymentMethod string  `json:"payment_method" validate:"required"`
+	CustomerID    string  `json:"customer_id" validate:"required"`
+	OrderID       string  `json:"order_id" validate:"required"`
+	Description   string  `json:"description"`
 }
 
 // PaymentResponse represents a payment response
 type PaymentResponse struct {
 	ID            uuid.UUID `json:"id"`
-	Amount        int64     `json:"amount"`
+	Amount        float64   `json:"amount"`
 	Currency      string    `json:"currency"`
 	Status        string    `json:"status"`
 	PaymentMethod string    `json:"payment_method"`
@@ -102,7 +102,7 @@ type Plan struct {
 	Description  string          `json:"description"`
 	FeatureCodes []string        `json:"feature_codes"`
 	BillingCycle string          `json:"billing_cycle"`
-	PriceCents   int64           `json:"price_cents"`
+	PriceDollars float64         `json:"price_dollars"`
 	Currency     string          `json:"currency"`
 	MaxUsers     int32           `json:"max_users"`
 	UsageLimits  json.RawMessage `json:"usage_limits"`

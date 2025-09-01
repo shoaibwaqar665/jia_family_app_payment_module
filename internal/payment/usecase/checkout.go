@@ -69,7 +69,7 @@ func (uc *CheckoutUseCase) CreateCheckoutSession(ctx context.Context, planID, us
 	}
 
 	// Calculate pricing based on country code
-	basePrice := plan.PriceCents // Plan price in cents
+	basePrice := plan.PriceDollars // Plan price in dollars
 	adjustedPrice := basePrice
 	pricingMultiplier := 1.0
 
@@ -85,8 +85,8 @@ func (uc *CheckoutUseCase) CreateCheckoutSession(ctx context.Context, planID, us
 				zap.String("zone", pricingZone.Zone),
 				zap.String("zone_name", pricingZone.ZoneName),
 				zap.Float64("multiplier", pricingMultiplier),
-				zap.Int64("base_price", basePrice),
-				zap.Int64("adjusted_price", adjustedPrice))
+				zap.Float64("base_price", basePrice),
+				zap.Float64("adjusted_price", adjustedPrice))
 		} else {
 			log.Warn(ctx, "Pricing zone not found, using base price",
 				zap.String("country_code", countryCode),
@@ -103,8 +103,8 @@ func (uc *CheckoutUseCase) CreateCheckoutSession(ctx context.Context, planID, us
 		zap.String("user_id", userID),
 		zap.String("family_id", getStringValue(familyID)),
 		zap.String("country_code", countryCode),
-		zap.Int64("base_price", basePrice),
-		zap.Int64("adjusted_price", adjustedPrice),
+		zap.Float64("base_price", basePrice),
+		zap.Float64("adjusted_price", adjustedPrice),
 		zap.Float64("pricing_multiplier", pricingMultiplier),
 		zap.String("provider", "stripe"))
 
@@ -183,8 +183,8 @@ type CheckoutSessionResponse struct {
 	Provider          string  `json:"provider"`
 	SessionID         string  `json:"session_id"`
 	RedirectURL       string  `json:"redirect_url"`
-	BasePrice         int64   `json:"base_price"`         // Base price in cents
-	AdjustedPrice     int64   `json:"adjusted_price"`     // Price after multiplier in cents
+	BasePrice         float64 `json:"base_price"`         // Base price in dollars
+	AdjustedPrice     float64 `json:"adjusted_price"`     // Price after multiplier in dollars
 	PricingMultiplier float64 `json:"pricing_multiplier"` // Applied multiplier
 }
 

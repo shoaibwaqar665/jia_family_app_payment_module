@@ -36,7 +36,7 @@ type CreateCheckoutSessionRequest struct {
 	SuccessURL  string            `json:"success_url"`
 	CancelURL   string            `json:"cancel_url"`
 	CountryCode string            `json:"country_code,omitempty"` // ISO country code for pricing
-	BasePrice   int64             `json:"base_price"`             // Base price in cents
+	BasePrice   float64           `json:"base_price"`             // Base price in dollars
 	Currency    string            `json:"currency"`               // Currency code
 	Metadata    map[string]string `json:"metadata,omitempty"`
 }
@@ -68,7 +68,7 @@ type WebhookResult struct {
 	FeatureCode  string                 `json:"feature_code"`
 	PlanID       uuid.UUID              `json:"plan_id"`
 	PlanIDString string                 `json:"plan_id_string"` // Original plan ID string for database
-	Amount       int64                  `json:"amount"`
+	Amount       float64                `json:"amount"`
 	Currency     string                 `json:"currency"`
 	Status       string                 `json:"status"`
 	ExpiresAt    *time.Time             `json:"expires_at,omitempty"`
