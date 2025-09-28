@@ -44,9 +44,10 @@ type AuthConfig struct {
 
 // BillingConfig holds billing provider configuration
 type BillingConfig struct {
-	Provider          string `mapstructure:"provider"`
-	StripeSecret      string `mapstructure:"stripe_secret"`
-	StripePublishable string `mapstructure:"stripe_publishable"`
+	Provider            string `mapstructure:"provider"`
+	StripeSecret        string `mapstructure:"stripe_secret"`
+	StripePublishable   string `mapstructure:"stripe_publishable"`
+	StripeWebhookSecret string `mapstructure:"stripe_webhook_secret"`
 }
 
 // EventsConfig holds event streaming configuration

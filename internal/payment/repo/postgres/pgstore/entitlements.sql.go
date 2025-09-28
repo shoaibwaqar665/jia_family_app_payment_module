@@ -73,6 +73,46 @@ func (q *Queries) GetEntitlementByID(ctx context.Context, db DBTX, id pgtype.UUI
 	return &i, err
 }
 
+const GetEntitlementsBySubscriptionID = `-- name: GetEntitlementsBySubscriptionID :many
+SELECT id, user_id, family_id, feature_code, plan_id, subscription_id, status, granted_at, expires_at, usage_limits, metadata, created_at, updated_at FROM entitlements 
+WHERE subscription_id = $1
+ORDER BY granted_at DESC
+`
+
+func (q *Queries) GetEntitlementsBySubscriptionID(ctx context.Context, db DBTX, subscriptionID pgtype.Text) ([]*Entitlement, error) {
+	rows, err := db.Query(ctx, GetEntitlementsBySubscriptionID, subscriptionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []*Entitlement{}
+	for rows.Next() {
+		var i Entitlement
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.FamilyID,
+			&i.FeatureCode,
+			&i.PlanID,
+			&i.SubscriptionID,
+			&i.Status,
+			&i.GrantedAt,
+			&i.ExpiresAt,
+			&i.UsageLimits,
+			&i.Metadata,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, &i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const InsertEntitlement = `-- name: InsertEntitlement :one
 INSERT INTO entitlements (
     user_id, family_id, feature_code, plan_id, subscription_id,
@@ -210,6 +250,64 @@ func (q *Queries) ListExpiringEntitlements(ctx context.Context, db DBTX) ([]*Ent
 		return nil, err
 	}
 	return items, nil
+}
+
+const UpdateEntitlement = `-- name: UpdateEntitlement :one
+UPDATE entitlements 
+SET user_id = $1,
+    family_id = $2,
+    feature_code = $3,
+    plan_id = $4,
+    subscription_id = $5,
+    status = $6,
+    granted_at = $7,
+    expires_at = $8,
+    updated_at = NOW()
+WHERE id = $9
+RETURNING id, user_id, family_id, feature_code, plan_id, subscription_id, status, granted_at, expires_at, usage_limits, metadata, created_at, updated_at
+`
+
+type UpdateEntitlementParams struct {
+	UserID         string           `json:"user_id"`
+	FamilyID       pgtype.Text      `json:"family_id"`
+	FeatureCode    string           `json:"feature_code"`
+	PlanID         string           `json:"plan_id"`
+	SubscriptionID pgtype.Text      `json:"subscription_id"`
+	Status         string           `json:"status"`
+	GrantedAt      pgtype.Timestamp `json:"granted_at"`
+	ExpiresAt      pgtype.Timestamp `json:"expires_at"`
+	ID             pgtype.UUID      `json:"id"`
+}
+
+func (q *Queries) UpdateEntitlement(ctx context.Context, db DBTX, arg UpdateEntitlementParams) (*Entitlement, error) {
+	row := db.QueryRow(ctx, UpdateEntitlement,
+		arg.UserID,
+		arg.FamilyID,
+		arg.FeatureCode,
+		arg.PlanID,
+		arg.SubscriptionID,
+		arg.Status,
+		arg.GrantedAt,
+		arg.ExpiresAt,
+		arg.ID,
+	)
+	var i Entitlement
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.FamilyID,
+		&i.FeatureCode,
+		&i.PlanID,
+		&i.SubscriptionID,
+		&i.Status,
+		&i.GrantedAt,
+		&i.ExpiresAt,
+		&i.UsageLimits,
+		&i.Metadata,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return &i, err
 }
 
 const UpdateEntitlementExpiry = `-- name: UpdateEntitlementExpiry :one

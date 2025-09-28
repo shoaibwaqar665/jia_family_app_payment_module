@@ -15,9 +15,17 @@ type Querier interface {
 	CountPayments(ctx context.Context, db DBTX) (int64, error)
 	CountPricingZones(ctx context.Context, db DBTX) (int64, error)
 	CreatePayment(ctx context.Context, db DBTX, arg CreatePaymentParams) (*Payment, error)
+	CreateSubscription(ctx context.Context, db DBTX, arg CreateSubscriptionParams) (*Subscription, error)
+	CreateUsage(ctx context.Context, db DBTX, arg CreateUsageParams) error
 	DeletePayment(ctx context.Context, db DBTX, id pgtype.UUID) error
 	DeletePricingZone(ctx context.Context, db DBTX, isoCode string) error
+	DeleteSubscription(ctx context.Context, db DBTX, id pgtype.UUID) error
+	DeleteUsage(ctx context.Context, db DBTX, arg DeleteUsageParams) error
+	GetActiveSubscriptions(ctx context.Context, db DBTX) ([]*Subscription, error)
+	GetCurrentUsage(ctx context.Context, db DBTX, arg GetCurrentUsageParams) (interface{}, error)
 	GetEntitlementByID(ctx context.Context, db DBTX, id pgtype.UUID) (*Entitlement, error)
+	GetEntitlementsBySubscriptionID(ctx context.Context, db DBTX, subscriptionID pgtype.Text) ([]*Entitlement, error)
+	GetExpiringSubscriptions(ctx context.Context, db DBTX, beforeDate pgtype.Timestamptz) ([]*Subscription, error)
 	GetPaymentByID(ctx context.Context, db DBTX, id pgtype.UUID) (*Payment, error)
 	GetPaymentByOrderID(ctx context.Context, db DBTX, orderID string) (*Payment, error)
 	GetPaymentsByCustomerID(ctx context.Context, db DBTX, customerID string) ([]*Payment, error)
@@ -25,6 +33,14 @@ type Querier interface {
 	GetPricingZoneByCountry(ctx context.Context, db DBTX, lower string) (*PricingZone, error)
 	GetPricingZoneByISOCode(ctx context.Context, db DBTX, isoCode string) (*PricingZone, error)
 	GetPricingZonesByZone(ctx context.Context, db DBTX, zone string) ([]*PricingZone, error)
+	GetSubscriptionByExternalID(ctx context.Context, db DBTX, externalID pgtype.Text) (*Subscription, error)
+	GetSubscriptionByID(ctx context.Context, db DBTX, id pgtype.UUID) (*Subscription, error)
+	GetSubscriptionsByPlan(ctx context.Context, db DBTX, planID pgtype.UUID) ([]*Subscription, error)
+	GetSubscriptionsByStatus(ctx context.Context, db DBTX, status string) ([]*Subscription, error)
+	GetSubscriptionsByUserID(ctx context.Context, db DBTX, userID string) ([]*Subscription, error)
+	GetUsageByID(ctx context.Context, db DBTX, id pgtype.UUID) (*Usage, error)
+	GetUsageHistory(ctx context.Context, db DBTX, arg GetUsageHistoryParams) ([]*Usage, error)
+	GetUsageStats(ctx context.Context, db DBTX, arg GetUsageStatsParams) ([]*GetUsageStatsRow, error)
 	InsertEntitlement(ctx context.Context, db DBTX, arg InsertEntitlementParams) (*Entitlement, error)
 	InsertPlan(ctx context.Context, db DBTX, arg InsertPlanParams) (*Plan, error)
 	ListActivePlans(ctx context.Context, db DBTX) ([]*Plan, error)
@@ -32,11 +48,16 @@ type Querier interface {
 	ListExpiringEntitlements(ctx context.Context, db DBTX) ([]*Entitlement, error)
 	ListPayments(ctx context.Context, db DBTX) ([]*Payment, error)
 	ListPricingZones(ctx context.Context, db DBTX) ([]*PricingZone, error)
+	ListUsageByUser(ctx context.Context, db DBTX, arg ListUsageByUserParams) ([]*Usage, error)
+	RenewSubscription(ctx context.Context, db DBTX, arg RenewSubscriptionParams) (*Subscription, error)
+	UpdateEntitlement(ctx context.Context, db DBTX, arg UpdateEntitlementParams) (*Entitlement, error)
 	UpdateEntitlementExpiry(ctx context.Context, db DBTX, arg UpdateEntitlementExpiryParams) (*Entitlement, error)
 	UpdateEntitlementStatus(ctx context.Context, db DBTX, arg UpdateEntitlementStatusParams) (*Entitlement, error)
 	UpdatePayment(ctx context.Context, db DBTX, arg UpdatePaymentParams) (*Payment, error)
 	UpdatePaymentStatus(ctx context.Context, db DBTX, arg UpdatePaymentStatusParams) (*Payment, error)
 	UpdatePlanActive(ctx context.Context, db DBTX, arg UpdatePlanActiveParams) (*Plan, error)
+	UpdateSubscription(ctx context.Context, db DBTX, arg UpdateSubscriptionParams) (*Subscription, error)
+	UpdateSubscriptionStatus(ctx context.Context, db DBTX, arg UpdateSubscriptionStatusParams) (*Subscription, error)
 	UpsertPricingZone(ctx context.Context, db DBTX, arg UpsertPricingZoneParams) (*PricingZone, error)
 }
 

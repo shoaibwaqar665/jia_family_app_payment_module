@@ -128,3 +128,42 @@ type Entitlement struct {
 	CreatedAt      time.Time       `json:"created_at"`
 	UpdatedAt      time.Time       `json:"updated_at"`
 }
+
+// Subscription represents a subscription with lifecycle management
+type Subscription struct {
+	ID                     uuid.UUID              `json:"id"`
+	UserID                 string                 `json:"user_id"`
+	FamilyID               *string                `json:"family_id,omitempty"`
+	PlanID                 uuid.UUID              `json:"plan_id"`
+	Status                 string                 `json:"status"`
+	CurrentPeriodStart     time.Time              `json:"current_period_start"`
+	CurrentPeriodEnd       time.Time              `json:"current_period_end"`
+	CancelAtPeriodEnd      bool                   `json:"cancel_at_period_end"`
+	CancelledAt            *time.Time             `json:"cancelled_at,omitempty"`
+	ExternalSubscriptionID string                 `json:"external_subscription_id"`
+	Metadata               map[string]interface{} `json:"metadata"`
+	CreatedAt              time.Time              `json:"created_at"`
+	UpdatedAt              time.Time              `json:"updated_at"`
+}
+
+// Subscription status constants
+const (
+	SubscriptionStatusActive    = "active"
+	SubscriptionStatusPastDue   = "past_due"
+	SubscriptionStatusSuspended = "suspended"
+	SubscriptionStatusCancelled = "cancelled"
+	SubscriptionStatusExpired   = "expired"
+)
+
+// Usage represents usage tracking for quota management
+type Usage struct {
+	ID           uuid.UUID              `json:"id"`
+	UserID       string                 `json:"user_id"`
+	FamilyID     *string                `json:"family_id,omitempty"`
+	FeatureCode  string                 `json:"feature_code"`
+	ResourceType string                 `json:"resource_type"`
+	ResourceSize int64                  `json:"resource_size"`
+	Operation    string                 `json:"operation"`
+	Metadata     map[string]interface{} `json:"metadata"`
+	CreatedAt    time.Time              `json:"created_at"`
+}

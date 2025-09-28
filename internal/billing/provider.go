@@ -61,18 +61,19 @@ type Session struct {
 
 // WebhookResult represents the result of a billing webhook
 type WebhookResult struct {
-	EventType    string                 `json:"event_type"`
-	SessionID    string                 `json:"session_id"`
-	UserID       string                 `json:"user_id"`
-	FamilyID     *string                `json:"family_id,omitempty"`
-	FeatureCode  string                 `json:"feature_code"`
-	PlanID       uuid.UUID              `json:"plan_id"`
-	PlanIDString string                 `json:"plan_id_string"` // Original plan ID string for database
-	Amount       float64                `json:"amount"`
-	Currency     string                 `json:"currency"`
-	Status       string                 `json:"status"`
-	ExpiresAt    *time.Time             `json:"expires_at,omitempty"`
-	Metadata     map[string]interface{} `json:"metadata,omitempty"`
+	EventType      string                 `json:"event_type"`
+	SessionID      string                 `json:"session_id"`
+	SubscriptionID string                 `json:"subscription_id"`
+	UserID         string                 `json:"user_id"`
+	FamilyID       *string                `json:"family_id,omitempty"`
+	FeatureCode    string                 `json:"feature_code"`
+	PlanID         uuid.UUID              `json:"plan_id"`
+	PlanIDString   string                 `json:"plan_id_string"` // Original plan ID string for database
+	Amount         float64                `json:"amount"`
+	Currency       string                 `json:"currency"`
+	Status         string                 `json:"status"`
+	ExpiresAt      *time.Time             `json:"expires_at,omitempty"`
+	Metadata       map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // SessionStatus represents the status of a checkout session

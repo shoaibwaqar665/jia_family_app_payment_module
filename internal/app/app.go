@@ -16,6 +16,7 @@ import (
 	"github.com/jia-app/paymentservice/internal/shared/config"
 	"github.com/jia-app/paymentservice/internal/shared/events"
 	"github.com/jia-app/paymentservice/internal/shared/log"
+	"github.com/jia-app/paymentservice/internal/shared/metrics"
 )
 
 // BootstrapAndServe initializes all dependencies and starts the gRPC server
@@ -134,24 +135,32 @@ func BootstrapAndServe(ctx context.Context) error {
 	// Initialize use cases
 	paymentUseCase := usecase.NewPaymentUseCase(repo.Payment())
 	entitlementUseCase := usecase.NewEntitlementUseCase(repo.Entitlement(), cacheClient, entitlementPublisher)
+	bulkEntitlementUseCase := usecase.NewBulkEntitlementUseCase(repo.Entitlement(), cacheClient)
 	checkoutUseCase := usecase.NewCheckoutUseCase(repo.Plan(), repo.Entitlement(), repo.PricingZone(), repo.Payment(), cacheClient, entitlementPublisher)
 	pricingZoneUseCase := usecase.NewPricingZoneUseCase(repo.PricingZone())
+
+	// Initialize metrics collector
+	log.Info(ctx, "Initializing metrics collector...")
+	metricsCollector := metrics.NewMetricsCollector()
+	log.Info(ctx, "Metrics collector initialized successfully")
 
 	paymentService := transport.NewPaymentService(
 		cfg,
 		paymentUseCase,
 		entitlementUseCase,
+		bulkEntitlementUseCase,
 		checkoutUseCase,
 		pricingZoneUseCase,
 		cacheClient,
 		entitlementPublisher,
 		billingProvider,
+		metricsCollector,
 	)
 	log.Info(ctx, "Payment service initialized successfully")
 
 	// Initialize gRPC server with dependencies
 	log.Info(ctx, "Initializing gRPC server...")
-	grpcServer := server.NewGRPCServer(cfg, dbPool, redisClient)
+	grpcServer := server.NewGRPCServer(cfg, dbPool, redisClient, metricsCollector)
 
 	// Register payment service with gRPC server
 	grpcServer.RegisterPaymentService(paymentService)

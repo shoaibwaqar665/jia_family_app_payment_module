@@ -69,3 +69,42 @@ type PricingZone struct {
 	CreatedAt               pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt               pgtype.Timestamptz `json:"updated_at"`
 }
+
+// Stores subscription information and lifecycle state
+type Subscription struct {
+	ID       pgtype.UUID `json:"id"`
+	UserID   string      `json:"user_id"`
+	FamilyID pgtype.Text `json:"family_id"`
+	PlanID   pgtype.UUID `json:"plan_id"`
+	// Current subscription status: active, past_due, suspended, cancelled, expired
+	Status string `json:"status"`
+	// Start of current billing period
+	CurrentPeriodStart pgtype.Timestamptz `json:"current_period_start"`
+	// End of current billing period
+	CurrentPeriodEnd pgtype.Timestamptz `json:"current_period_end"`
+	// Whether subscription should be cancelled at the end of current period
+	CancelAtPeriodEnd bool               `json:"cancel_at_period_end"`
+	CancelledAt       pgtype.Timestamptz `json:"cancelled_at"`
+	// External subscription ID from payment provider (e.g., Stripe)
+	ExternalSubscriptionID pgtype.Text        `json:"external_subscription_id"`
+	Metadata               []byte             `json:"metadata"`
+	CreatedAt              pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
+}
+
+// Tracks resource usage for quota management
+type Usage struct {
+	ID          pgtype.UUID `json:"id"`
+	UserID      string      `json:"user_id"`
+	FamilyID    pgtype.Text `json:"family_id"`
+	FeatureCode string      `json:"feature_code"`
+	// Type of resource being used (e.g., storage, api_calls, bandwidth)
+	ResourceType string `json:"resource_type"`
+	// Size/amount of resource used
+	ResourceSize int64 `json:"resource_size"`
+	// Operation that consumed the resource
+	Operation pgtype.Text `json:"operation"`
+	// Additional metadata about the usage
+	Metadata  []byte             `json:"metadata"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}

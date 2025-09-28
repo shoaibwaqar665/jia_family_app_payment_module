@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jia-app/paymentservice/internal/payment/domain"
 )
 
@@ -18,6 +19,8 @@ type EntitlementRepository interface {
 	Insert(ctx context.Context, e domain.Entitlement) (domain.Entitlement, error)
 	UpdateStatus(ctx context.Context, id, status string) error
 	UpdateExpiry(ctx context.Context, id string, expiresAt *time.Time) error
+	GetBySubscriptionID(ctx context.Context, subscriptionID string) ([]domain.Entitlement, error)
+	Update(ctx context.Context, e domain.Entitlement) (domain.Entitlement, error)
 }
 
 type PaymentRepository interface {
@@ -70,4 +73,24 @@ type PricingZoneRepository interface {
 
 	// Delete deletes a pricing zone by ISO code
 	Delete(ctx context.Context, isoCode string) error
+}
+
+type UsageRepository interface {
+	// Create creates a new usage record
+	Create(ctx context.Context, usage domain.Usage) error
+
+	// GetCurrentUsage gets current usage for a user, feature, and resource type within a period
+	GetCurrentUsage(ctx context.Context, userID, featureCode, resourceType string, period time.Duration) (int64, error)
+
+	// GetUsageHistory gets usage history for a user, feature, and resource type
+	GetUsageHistory(ctx context.Context, userID, featureCode, resourceType string, period time.Duration) ([]domain.Usage, error)
+
+	// DeleteUsage deletes usage records for a user, feature, and resource type
+	DeleteUsage(ctx context.Context, userID, featureCode, resourceType string) error
+
+	// GetUsageByID gets a usage record by ID
+	GetUsageByID(ctx context.Context, id uuid.UUID) (*domain.Usage, error)
+
+	// ListUsageByUser gets usage records for a user
+	ListUsageByUser(ctx context.Context, userID string, limit, offset int) ([]domain.Usage, error)
 }

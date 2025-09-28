@@ -13,21 +13,21 @@ const PLANS = {
         planId: 'basic_monthly', // Database plan ID
         basePrice: 9.99, // $9.99 in dollars
         currency: 'USD',
-        features: ['basic_storage', 'basic_support', 'core_features']
+        features: ['basic_storage']
     },
     pro_monthly: {
         name: 'Pro Plan',
         planId: 'pro_monthly', // Database plan ID
         basePrice: 19.99, // $19.99 in dollars
         currency: 'USD',
-        features: ['pro_storage', 'pro_support', 'core_features', 'advanced_analytics', 'api_access']
+        features: ['pro_storage']
     },
     family_monthly: {
         name: 'Family Plan',
         planId: 'family_monthly', // Database plan ID
         basePrice: 29.99, // $29.99 in dollars
         currency: 'USD',
-        features: ['family_storage', 'family_support', 'core_features', 'family_sharing', 'parental_controls']
+        features: ['family_storage']
     }
 };
 
@@ -250,7 +250,7 @@ async function createCheckoutSession(data) {
                 country_code: data.countryCode,
                 base_price: data.basePrice,
                 currency: data.currency,
-                success_url: `${window.location.origin}/success?session_id={CHECKOUT_SESSION_ID}&user_id=${CONFIG.USER_ID}`,
+                success_url: `${window.location.origin}/success?session_id={CHECKOUT_SESSION_ID}&user_id=${data.userId}&plan_id=${data.planId}&family_id=${data.familyId}`,
                 cancel_url: `${window.location.origin}/`
             })
         });

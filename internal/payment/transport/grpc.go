@@ -15,23 +15,29 @@ import (
 	"github.com/jia-app/paymentservice/internal/billing"
 	"github.com/jia-app/paymentservice/internal/payment/domain"
 	"github.com/jia-app/paymentservice/internal/payment/usecase"
+	"github.com/jia-app/paymentservice/internal/payment/webhook"
 	"github.com/jia-app/paymentservice/internal/shared/cache"
 	"github.com/jia-app/paymentservice/internal/shared/config"
 	"github.com/jia-app/paymentservice/internal/shared/events"
 	"github.com/jia-app/paymentservice/internal/shared/log"
+	"github.com/jia-app/paymentservice/internal/shared/metrics"
 )
 
 // PaymentService provides payment business logic and implements PaymentServiceServer
 type PaymentService struct {
 	paymentv1.UnimplementedPaymentServiceServer
-	config               *config.Config
-	paymentUseCase       *usecase.PaymentUseCase
-	entitlementUseCase   *usecase.EntitlementUseCase
-	checkoutUseCase      *usecase.CheckoutUseCase
-	pricingZoneUseCase   *usecase.PricingZoneUseCase
-	cache                *cache.Cache
-	entitlementPublisher events.EntitlementPublisher
-	billingProvider      billing.Provider
+	config                 *config.Config
+	paymentUseCase         *usecase.PaymentUseCase
+	entitlementUseCase     *usecase.EntitlementUseCase
+	bulkEntitlementUseCase *usecase.BulkEntitlementUseCase
+	checkoutUseCase        *usecase.CheckoutUseCase
+	pricingZoneUseCase     *usecase.PricingZoneUseCase
+	cache                  *cache.Cache
+	entitlementPublisher   events.EntitlementPublisher
+	billingProvider        billing.Provider
+	webhookValidator       *webhook.Validator
+	webhookParser          *webhook.Parser
+	metricsCollector       *metrics.MetricsCollector
 }
 
 // NewPaymentService creates a new payment service
@@ -39,26 +45,38 @@ func NewPaymentService(
 	config *config.Config,
 	paymentUseCase *usecase.PaymentUseCase,
 	entitlementUseCase *usecase.EntitlementUseCase,
+	bulkEntitlementUseCase *usecase.BulkEntitlementUseCase,
 	checkoutUseCase *usecase.CheckoutUseCase,
 	pricingZoneUseCase *usecase.PricingZoneUseCase,
 	cache *cache.Cache,
 	entitlementPublisher events.EntitlementPublisher,
 	billingProvider billing.Provider,
+	metricsCollector *metrics.MetricsCollector,
 ) *PaymentService {
+	// Initialize webhook validator and parser
+	webhookValidator := webhook.NewValidator(config.Billing.StripeWebhookSecret)
+	webhookParser := webhook.NewParser()
+
 	return &PaymentService{
-		config:               config,
-		paymentUseCase:       paymentUseCase,
-		entitlementUseCase:   entitlementUseCase,
-		checkoutUseCase:      checkoutUseCase,
-		pricingZoneUseCase:   pricingZoneUseCase,
-		cache:                cache,
-		entitlementPublisher: entitlementPublisher,
-		billingProvider:      billingProvider,
+		config:                 config,
+		paymentUseCase:         paymentUseCase,
+		entitlementUseCase:     entitlementUseCase,
+		bulkEntitlementUseCase: bulkEntitlementUseCase,
+		checkoutUseCase:        checkoutUseCase,
+		pricingZoneUseCase:     pricingZoneUseCase,
+		cache:                  cache,
+		entitlementPublisher:   entitlementPublisher,
+		billingProvider:        billingProvider,
+		webhookValidator:       webhookValidator,
+		webhookParser:          webhookParser,
+		metricsCollector:       metricsCollector,
 	}
 }
 
 // CreatePayment creates a new payment
 func (s *PaymentService) CreatePayment(ctx context.Context, req *paymentv1.CreatePaymentRequest) (*paymentv1.CreatePaymentResponse, error) {
+	start := time.Now()
+
 	// Convert proto request to domain request
 	domainReq := &domain.PaymentRequest{
 		Amount:        req.Amount,
@@ -71,6 +89,11 @@ func (s *PaymentService) CreatePayment(ctx context.Context, req *paymentv1.Creat
 
 	// Call use case
 	domainResp, err := s.paymentUseCase.CreatePayment(ctx, domainReq)
+	duration := time.Since(start)
+
+	// Record metrics
+	s.metricsCollector.RecordPayment(ctx, err == nil, float64(req.Amount)/100, duration)
+
 	if err != nil {
 		return nil, err
 	}
@@ -316,53 +339,55 @@ func (s *PaymentService) ApplyWebhook(ctx context.Context, wr billing.WebhookRes
 
 // PaymentSuccessWebhook handles payment success webhooks
 func (s *PaymentService) PaymentSuccessWebhook(ctx context.Context, payload []byte, signature string) error {
-	// Validate signature (stub implementation)
-	if err := s.validateWebhookSignature(payload, signature); err != nil {
+	start := time.Now()
+
+	// Validate webhook signature
+	if err := s.webhookValidator.ValidateStripeWebhook(payload, signature); err != nil {
+		log.Error(ctx, "Webhook signature validation failed", zap.Error(err))
+		s.metricsCollector.RecordWebhook(ctx, false, time.Since(start))
 		return status.Error(codes.Unauthenticated, "invalid webhook signature")
 	}
 
-	// Parse payload (stub implementation)
-	webhookData, err := s.parseWebhookPayload(payload)
+	// Parse webhook payload
+	webhookResult, err := s.webhookParser.ParseStripeWebhook(payload)
 	if err != nil {
+		log.Error(ctx, "Failed to parse webhook payload", zap.Error(err))
+		s.metricsCollector.RecordWebhook(ctx, false, time.Since(start))
 		return status.Error(codes.InvalidArgument, "invalid webhook payload")
 	}
 
-	// Create entitlement using use case
-	_, err = s.entitlementUseCase.CreateEntitlement(ctx, webhookData.UserID, webhookData.FeatureCode, webhookData.PlanID, webhookData.ExpiresAt)
-	if err != nil {
-		return status.Errorf(codes.Internal, "failed to create entitlement: %v", err)
+	// Convert to billing.WebhookResult
+	billingResult := billing.WebhookResult{
+		EventType:    "payment.succeeded", // Default event type
+		SessionID:    "",                  // Will be set if available
+		UserID:       webhookResult.UserID,
+		FamilyID:     webhookResult.FamilyID,
+		FeatureCode:  webhookResult.FeatureCode,
+		PlanID:       webhookResult.PlanID,
+		PlanIDString: webhookResult.PlanIDString,
+		Amount:       float64(webhookResult.Amount),
+		Currency:     webhookResult.Currency,
+		Status:       webhookResult.Status,
+		ExpiresAt:    webhookResult.ExpiresAt,
+		Metadata:     webhookResult.Metadata,
 	}
 
-	return nil
-}
-
-// Helper types for webhook handling
-type WebhookData struct {
-	UserID      string     `json:"user_id"`
-	FeatureCode string     `json:"feature_code"`
-	PlanID      uuid.UUID  `json:"plan_id"`
-	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
-}
-
-// Helper functions
-func (s *PaymentService) validateWebhookSignature(payload []byte, signature string) error {
-	// TODO: Implement actual signature validation
-	// For now, just check that signature is not empty
-	if signature == "" {
-		return fmt.Errorf("missing signature")
+	// Apply webhook result using checkout use case
+	if err := s.checkoutUseCase.ApplyWebhook(ctx, billingResult); err != nil {
+		log.Error(ctx, "Failed to apply webhook result", zap.Error(err))
+		s.metricsCollector.RecordWebhook(ctx, false, time.Since(start))
+		return status.Errorf(codes.Internal, "failed to apply webhook: %v", err)
 	}
-	return nil
-}
 
-func (s *PaymentService) parseWebhookPayload(payload []byte) (*WebhookData, error) {
-	// TODO: Implement actual payload parsing
-	// For now, return placeholder data
-	return &WebhookData{
-		UserID:      "user123",
-		FeatureCode: "premium_feature",
-		PlanID:      uuid.New(),
-		ExpiresAt:   nil, // Never expires
-	}, nil
+	// Record successful webhook processing
+	s.metricsCollector.RecordWebhook(ctx, true, time.Since(start))
+
+	log.Info(ctx, "Webhook processed successfully",
+		zap.String("user_id", webhookResult.UserID),
+		zap.String("feature_code", webhookResult.FeatureCode),
+		zap.String("status", webhookResult.Status))
+
+	return nil
 }
 
 // ListEntitlements retrieves entitlements for a user
@@ -409,8 +434,15 @@ func (s *PaymentService) ListEntitlements(ctx context.Context, req *paymentv1.Li
 
 // CheckEntitlement checks if a user has access to a feature
 func (s *PaymentService) CheckEntitlement(ctx context.Context, req *paymentv1.CheckEntitlementRequest) (*paymentv1.CheckEntitlementResponse, error) {
+	start := time.Now()
+
 	// Check entitlement using use case
 	response, err := s.entitlementUseCase.CheckEntitlement(ctx, req.UserId, req.FeatureCode)
+	duration := time.Since(start)
+
+	// Record metrics (assuming cache miss for now - this would be improved with actual cache hit detection)
+	s.metricsCollector.RecordEntitlementCheck(ctx, false, duration)
+
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to check entitlement: %v", err)
 	}
@@ -447,6 +479,100 @@ func (s *PaymentService) CheckEntitlement(ctx context.Context, req *paymentv1.Ch
 	}
 
 	return pbResponse, nil
+}
+
+// BulkCheckEntitlements checks multiple entitlements in a single request
+func (s *PaymentService) BulkCheckEntitlements(ctx context.Context, req *paymentv1.BulkCheckEntitlementsRequest) (*paymentv1.BulkCheckEntitlementsResponse, error) {
+	// Convert proto request to use case request
+	bulkReq := usecase.BulkCheckRequest{
+		UserID: req.UserId,
+		Checks: make([]usecase.BulkCheckItem, len(req.Checks)),
+	}
+
+	for i, check := range req.Checks {
+		// Convert metadata from map[string]string to map[string]interface{}
+		metadata := make(map[string]interface{})
+		for k, v := range check.Metadata {
+			metadata[k] = v
+		}
+
+		bulkReq.Checks[i] = usecase.BulkCheckItem{
+			FeatureCode:  check.FeatureCode,
+			Operation:    check.Operation,
+			ResourceSize: check.ResourceSize,
+			Metadata:     metadata,
+		}
+	}
+
+	// Perform bulk check
+	response, err := s.bulkEntitlementUseCase.BulkCheckEntitlements(ctx, bulkReq)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to perform bulk entitlement check: %v", err)
+	}
+
+	// Convert to protobuf response
+	pbResults := make([]*paymentv1.BulkCheckResult, len(response.Results))
+	for i, result := range response.Results {
+		pbResult := &paymentv1.BulkCheckResult{
+			FeatureCode: result.FeatureCode,
+			Authorized:  result.Authorized,
+			Reason:      result.Reason,
+			UpgradeUrl:  result.UpgradeURL,
+		}
+
+		// Convert entitlement if present
+		if result.Entitlement != nil {
+			pbEntitlement := &paymentv1.Entitlement{
+				Id:          result.Entitlement.ID.String(),
+				UserId:      result.Entitlement.UserID,
+				FeatureCode: result.Entitlement.FeatureCode,
+				PlanId:      result.Entitlement.PlanID.String(),
+				Status:      result.Entitlement.Status,
+				GrantedAt:   timestamppb.New(result.Entitlement.GrantedAt),
+				CreatedAt:   timestamppb.New(result.Entitlement.CreatedAt),
+				UpdatedAt:   timestamppb.New(result.Entitlement.UpdatedAt),
+			}
+
+			if result.Entitlement.FamilyID != nil {
+				pbEntitlement.FamilyId = *result.Entitlement.FamilyID
+			}
+			if result.Entitlement.SubscriptionID != nil {
+				pbEntitlement.SubscriptionId = *result.Entitlement.SubscriptionID
+			}
+			if result.Entitlement.ExpiresAt != nil {
+				pbEntitlement.ExpiresAt = timestamppb.New(*result.Entitlement.ExpiresAt)
+			}
+
+			pbResult.Entitlement = pbEntitlement
+		}
+
+		// Convert metadata
+		if result.Metadata != nil {
+			pbResult.Metadata = make(map[string]string)
+			for k, v := range result.Metadata {
+				if str, ok := v.(string); ok {
+					pbResult.Metadata[k] = str
+				}
+			}
+		}
+
+		pbResults[i] = pbResult
+	}
+
+	// Convert summary
+	pbSummary := &paymentv1.BulkCheckSummary{
+		TotalChecks:      int32(response.Summary.TotalChecks),
+		Authorized:       int32(response.Summary.Authorized),
+		NotAuthorized:    int32(response.Summary.NotAuthorized),
+		CacheHits:        int32(response.Summary.CacheHits),
+		CacheMisses:      int32(response.Summary.CacheMisses),
+		ProcessingTimeMs: response.Summary.ProcessingTime,
+	}
+
+	return &paymentv1.BulkCheckEntitlementsResponse{
+		Results: pbResults,
+		Summary: pbSummary,
+	}, nil
 }
 
 // ListPricingZones retrieves all pricing zones

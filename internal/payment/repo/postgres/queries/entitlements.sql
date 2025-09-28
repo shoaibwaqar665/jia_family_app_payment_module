@@ -45,3 +45,22 @@ WHERE expires_at IS NOT NULL
   AND expires_at <= NOW() 
   AND status = 'active'
 ORDER BY expires_at ASC;
+
+-- name: GetEntitlementsBySubscriptionID :many
+SELECT * FROM entitlements 
+WHERE subscription_id = sqlc.arg(subscription_id)
+ORDER BY granted_at DESC;
+
+-- name: UpdateEntitlement :one
+UPDATE entitlements 
+SET user_id = sqlc.arg(user_id),
+    family_id = sqlc.narg(family_id),
+    feature_code = sqlc.arg(feature_code),
+    plan_id = sqlc.arg(plan_id),
+    subscription_id = sqlc.narg(subscription_id),
+    status = sqlc.arg(status),
+    granted_at = sqlc.arg(granted_at),
+    expires_at = sqlc.narg(expires_at),
+    updated_at = NOW()
+WHERE id = sqlc.arg(id)
+RETURNING *;

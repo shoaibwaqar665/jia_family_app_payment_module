@@ -24,6 +24,8 @@ import (
 	"github.com/jia-app/paymentservice/internal/app/server/interceptors"
 	"github.com/jia-app/paymentservice/internal/shared/config"
 	"github.com/jia-app/paymentservice/internal/shared/log"
+	"github.com/jia-app/paymentservice/internal/shared/metrics"
+	"github.com/jia-app/paymentservice/internal/shared/ratelimit"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -38,13 +40,23 @@ type GRPCServer struct {
 }
 
 // NewGRPCServer creates a new gRPC server instance with all interceptors
-func NewGRPCServer(cfg *config.Config, dbPool *pgxpool.Pool, redisClient *redis.Client) *GRPCServer {
+func NewGRPCServer(cfg *config.Config, dbPool *pgxpool.Pool, redisClient *redis.Client, metricsCollector *metrics.MetricsCollector) *GRPCServer {
 	// Get logger instance
 	logger := log.L(context.Background())
 
 	// Create interceptors
 	authInterceptor := interceptors.NewAuthInterceptor()
 	loggingInterceptor := interceptors.NewLoggingInterceptor()
+
+	// Create rate limiting interceptor
+	rateLimitConfig := ratelimit.RateLimitConfigs.Moderate
+	rateLimitInterceptor := ratelimit.UnaryServerInterceptor(rateLimitConfig)
+	rateLimitStreamInterceptor := ratelimit.StreamServerInterceptor(rateLimitConfig)
+
+	// Create metrics interceptor
+	metricsInterceptor := metrics.NewMetricsInterceptor(metricsCollector)
+	metricsUnaryInterceptor := metricsInterceptor.UnaryServerInterceptor()
+	metricsStreamInterceptor := metricsInterceptor.StreamServerInterceptor()
 
 	// Recovery options
 	recoveryOpts := []grpc_recovery.Option{
@@ -64,12 +76,16 @@ func NewGRPCServer(cfg *config.Config, dbPool *pgxpool.Pool, redisClient *redis.
 		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
 			grpc_recovery.UnaryServerInterceptor(recoveryOpts...),
 			grpc_zap.UnaryServerInterceptor(logger, zapOpts...),
+			metricsUnaryInterceptor,
+			rateLimitInterceptor,
 			authInterceptor.Unary(),
 			loggingInterceptor.Unary(),
 		)),
 		grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(
 			grpc_recovery.StreamServerInterceptor(recoveryOpts...),
 			grpc_zap.StreamServerInterceptor(logger, zapOpts...),
+			metricsStreamInterceptor,
+			rateLimitStreamInterceptor,
 			authInterceptor.Stream(),
 			loggingInterceptor.Stream(),
 		)),

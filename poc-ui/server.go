@@ -412,21 +412,20 @@ func handleCreateEntitlement(w http.ResponseWriter, r *http.Request, client paym
 	}
 
 	// Validate required fields
-	if req.UserID == "" || req.FeatureCode == "" || req.PlanID == "" {
-		http.Error(w, "Missing required fields: user_id, feature_code, plan_id", http.StatusBadRequest)
+	if req.UserID == "" || req.PlanID == "" {
+		http.Error(w, "Missing required fields: user_id, plan_id", http.StatusBadRequest)
 		return
 	}
 
 	// Create a webhook payload to simulate entitlement creation
 	webhookPayload := map[string]interface{}{
-		"session_id":   req.SubscriptionID,
-		"user_id":      req.UserID,
-		"plan_id":      req.PlanID,
-		"feature_code": req.FeatureCode,
-		"amount":       19.99, // Default amount
-		"currency":     "USD",
-		"status":       req.Status,
-		"expires_at":   req.ExpiresAt,
+		"session_id": req.SubscriptionID,
+		"user_id":    req.UserID,
+		"plan_id":    req.PlanID,
+		"amount":     19.99, // Default amount
+		"currency":   "USD",
+		"status":     req.Status,
+		"expires_at": req.ExpiresAt,
 		"metadata": map[string]interface{}{
 			"family_id":      req.FamilyID,
 			"country_code":   "US",
@@ -494,18 +493,29 @@ func handlePaymentSuccess(w http.ResponseWriter, r *http.Request, client payment
 		userID = "test_user_123" // Default for POC
 	}
 
+	// Get plan_id from query parameters
+	planID := r.URL.Query().Get("plan_id")
+	if planID == "" {
+		planID = "pro_monthly" // Default plan for POC
+	}
+
+	// Get family_id from query parameters
+	familyID := r.URL.Query().Get("family_id")
+	if familyID == "" {
+		familyID = userID // Use userID as family ID for individual plans
+	}
+
 	// Create a webhook payload to simulate payment completion
 	webhookPayload := map[string]interface{}{
-		"session_id":   sessionID,
-		"user_id":      userID,
-		"plan_id":      "pro_monthly", // Default plan for POC
-		"feature_code": "pro_storage",
-		"amount":       19.99,
-		"currency":     "USD",
-		"status":       "completed",
-		"expires_at":   nil,
+		"session_id": sessionID,
+		"user_id":    userID,
+		"plan_id":    planID, // Use dynamic plan ID
+		"amount":     19.99,
+		"currency":   "USD",
+		"status":     "completed",
+		"expires_at": nil,
 		"metadata": map[string]interface{}{
-			"family_id":      "success_page_family",
+			"family_id":      familyID, // Use dynamic family ID
 			"country_code":   "US",
 			"base_price":     19.99,
 			"adjusted_price": 19.99,

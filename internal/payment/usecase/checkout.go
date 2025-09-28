@@ -27,6 +27,7 @@ type CheckoutUseCase struct {
 	paymentRepo          repo.PaymentRepository
 	cache                *cache.Cache // Can be nil if Redis is not available
 	entitlementPublisher events.EntitlementPublisher
+	planFeatureService   *PlanFeatureService
 }
 
 // NewCheckoutUseCase creates a new checkout use case
@@ -38,6 +39,7 @@ func NewCheckoutUseCase(
 	cache *cache.Cache,
 	entitlementPublisher events.EntitlementPublisher,
 ) *CheckoutUseCase {
+	planFeatureService := NewPlanFeatureService(planRepo)
 	return &CheckoutUseCase{
 		planRepo:             planRepo,
 		entitlementRepo:      entitlementRepo,
@@ -45,6 +47,7 @@ func NewCheckoutUseCase(
 		paymentRepo:          paymentRepo,
 		cache:                cache,
 		entitlementPublisher: entitlementPublisher,
+		planFeatureService:   planFeatureService,
 	}
 }
 
@@ -127,38 +130,93 @@ func (uc *CheckoutUseCase) ApplyWebhook(ctx context.Context, wr billing.WebhookR
 	if wr.UserID == "" {
 		return status.Error(codes.InvalidArgument, "user_id is required in webhook result")
 	}
-	if wr.FeatureCode == "" {
-		return status.Error(codes.InvalidArgument, "feature_code is required in webhook result")
-	}
-	if wr.PlanID == uuid.Nil {
-		return status.Error(codes.InvalidArgument, "plan_id is required in webhook result")
+	if wr.PlanIDString == "" {
+		return status.Error(codes.InvalidArgument, "plan_id_string is required in webhook result")
 	}
 
-	// Create or update entitlement
-	// Use the string plan ID if available, otherwise use the UUID
-	planID := wr.PlanID
-	if wr.PlanIDString != "" {
-		// Convert string plan ID to UUID for domain model
-		planID = uuid.NewSHA1(uuid.NameSpaceOID, []byte(wr.PlanIDString))
-	}
-
-	entitlement := domain.Entitlement{
-		ID:          uuid.New(),
-		UserID:      wr.UserID,
-		FamilyID:    wr.FamilyID,
-		FeatureCode: wr.FeatureCode,
-		PlanID:      planID,
-		Status:      "active",
-		GrantedAt:   time.Now(),
-		ExpiresAt:   wr.ExpiresAt,
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
-	}
-
-	// Upsert entitlement
-	savedEntitlement, err := uc.entitlementRepo.Insert(ctx, entitlement)
+	// Grant all entitlements for the plan
+	grantedFeatures, err := uc.planFeatureService.GrantEntitlementsForPlan(
+		ctx,
+		wr.UserID,
+		wr.PlanIDString,
+		wr.FamilyID,
+		&wr.SubscriptionID,
+		wr.ExpiresAt,
+	)
 	if err != nil {
-		return status.Errorf(codes.Internal, "failed to upsert entitlement: %v", err)
+		return status.Errorf(codes.Internal, "failed to grant entitlements for plan %s: %v", wr.PlanIDString, err)
+	}
+
+	// Create entitlements for each feature
+	for _, featureCode := range grantedFeatures {
+		// Convert string plan ID to UUID for domain model
+		planID := uuid.NewSHA1(uuid.NameSpaceOID, []byte(wr.PlanIDString))
+
+		// Check if entitlement already exists
+		existingEntitlement, found, err := uc.entitlementRepo.Check(ctx, wr.UserID, featureCode)
+		if err != nil {
+			log.Error(ctx, "Failed to check existing entitlement",
+				zap.String("user_id", wr.UserID),
+				zap.String("feature_code", featureCode),
+				zap.Error(err))
+			continue
+		}
+
+		// If entitlement already exists and is active, skip creation
+		if found && existingEntitlement.Status == "active" {
+			log.Info(ctx, "Entitlement already exists, skipping creation",
+				zap.String("user_id", wr.UserID),
+				zap.String("feature_code", featureCode),
+				zap.String("plan_id", wr.PlanIDString))
+			continue
+		}
+
+		entitlement := domain.Entitlement{
+			ID:          uuid.New(),
+			UserID:      wr.UserID,
+			FamilyID:    wr.FamilyID,
+			FeatureCode: featureCode,
+			PlanID:      planID,
+			Status:      "active",
+			GrantedAt:   time.Now(),
+			ExpiresAt:   wr.ExpiresAt,
+			CreatedAt:   time.Now(),
+			UpdatedAt:   time.Now(),
+		}
+
+		// Set subscription ID if provided
+		if wr.SubscriptionID != "" {
+			entitlement.SubscriptionID = &wr.SubscriptionID
+		}
+
+		// Insert entitlement
+		savedEntitlement, err := uc.entitlementRepo.Insert(ctx, entitlement)
+		if err != nil {
+			log.Error(ctx, "Failed to insert entitlement",
+				zap.String("user_id", wr.UserID),
+				zap.String("feature_code", featureCode),
+				zap.String("plan_id", wr.PlanIDString),
+				zap.Error(err))
+			continue // Continue with other entitlements even if one fails
+		}
+
+		// Publish entitlement.updated event for each entitlement
+		if uc.entitlementPublisher != nil {
+			if err := uc.entitlementPublisher.PublishEntitlementUpdated(ctx, savedEntitlement, "webhook_created"); err != nil {
+				log.Error(ctx, "Failed to publish entitlement.updated event", zap.Error(err))
+			}
+		}
+
+		// Evict cache for this entitlement
+		if uc.cache != nil {
+			uc.cache.DeleteEntitlement(ctx, savedEntitlement.UserID, savedEntitlement.FeatureCode)
+		}
+
+		log.Info(ctx, "Entitlement created successfully",
+			zap.String("user_id", wr.UserID),
+			zap.String("feature_code", featureCode),
+			zap.String("plan_id", wr.PlanIDString),
+			zap.String("family_id", getStringValue(wr.FamilyID)))
 	}
 
 	// Update payment status to completed if session ID is provided
@@ -166,7 +224,7 @@ func (uc *CheckoutUseCase) ApplyWebhook(ctx context.Context, wr billing.WebhookR
 		log.Info(ctx, "Attempting to update payment status",
 			zap.String("session_id", wr.SessionID),
 			zap.String("user_id", wr.UserID),
-			zap.String("feature_code", wr.FeatureCode))
+			zap.String("plan_id", wr.PlanIDString))
 
 		// Find payment by order ID (session ID)
 		payment, err := uc.paymentRepo.GetByOrderID(ctx, wr.SessionID)
@@ -195,25 +253,14 @@ func (uc *CheckoutUseCase) ApplyWebhook(ctx context.Context, wr billing.WebhookR
 	} else {
 		log.Warn(ctx, "No session ID provided in webhook result",
 			zap.String("user_id", wr.UserID),
-			zap.String("feature_code", wr.FeatureCode))
-	}
-
-	// Publish entitlement.updated event
-	if uc.entitlementPublisher != nil {
-		if err := uc.entitlementPublisher.PublishEntitlementUpdated(ctx, savedEntitlement, "webhook_created"); err != nil {
-			log.Error(ctx, "Failed to publish entitlement.updated event", zap.Error(err))
-		}
-	}
-
-	// Evict cache
-	if uc.cache != nil {
-		uc.cache.DeleteEntitlement(ctx, savedEntitlement.UserID, savedEntitlement.FeatureCode)
+			zap.String("plan_id", wr.PlanIDString))
 	}
 
 	log.Info(ctx, "Webhook applied successfully",
 		zap.String("user_id", wr.UserID),
-		zap.String("feature_code", wr.FeatureCode),
-		zap.String("plan_id", wr.PlanID.String()))
+		zap.String("plan_id", wr.PlanIDString),
+		zap.String("granted_features", strings.Join(grantedFeatures, ",")),
+		zap.String("family_id", getStringValue(wr.FamilyID)))
 
 	return nil
 }

@@ -12,6 +12,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/jia-app/paymentservice/internal/billing"
+	"github.com/jia-app/paymentservice/internal/shared/circuitbreaker"
 )
 
 // Adapter implements the billing.Provider interface for Stripe
@@ -19,6 +20,7 @@ type Adapter struct {
 	secretKey      string
 	publishableKey string
 	logger         *zap.Logger
+	circuitBreaker *circuitbreaker.CircuitBreaker
 }
 
 // NewAdapter creates a new Stripe billing adapter
@@ -27,80 +29,91 @@ func NewAdapter(secretKey, publishableKey string, logger *zap.Logger) *Adapter {
 		secretKey:      secretKey,
 		publishableKey: publishableKey,
 		logger:         logger,
+		circuitBreaker: circuitbreaker.GetOrCreateGlobal("stripe", circuitbreaker.StripeConfig),
 	}
 }
 
 // CreateCheckoutSession creates a Stripe checkout session
 func (a *Adapter) CreateCheckoutSession(ctx context.Context, req billing.CreateCheckoutSessionRequest) (*billing.CreateCheckoutSessionResponse, error) {
-	// Set Stripe API key
-	stripe.Key = a.secretKey
+	var result *billing.CreateCheckoutSessionResponse
+	var err error
 
-	// Create line items
-	lineItems := []*stripe.CheckoutSessionLineItemParams{
-		{
-			PriceData: &stripe.CheckoutSessionLineItemPriceDataParams{
-				Currency: stripe.String(req.Currency),
-				ProductData: &stripe.CheckoutSessionLineItemPriceDataProductDataParams{
-					Name:        stripe.String("Subscription Plan"),
-					Description: stripe.String(fmt.Sprintf("Plan ID: %s", req.PlanID.String())),
+	_, err = a.circuitBreaker.Execute(ctx, func() (interface{}, error) {
+		// Set Stripe API key
+		stripe.Key = a.secretKey
+
+		// Create line items
+		lineItems := []*stripe.CheckoutSessionLineItemParams{
+			{
+				PriceData: &stripe.CheckoutSessionLineItemPriceDataParams{
+					Currency: stripe.String(req.Currency),
+					ProductData: &stripe.CheckoutSessionLineItemPriceDataProductDataParams{
+						Name:        stripe.String("Subscription Plan"),
+						Description: stripe.String(fmt.Sprintf("Plan ID: %s", req.PlanID.String())),
+					},
+					UnitAmount: stripe.Int64(int64(req.BasePrice * 100)), // Convert dollars to cents for Stripe
 				},
-				UnitAmount: stripe.Int64(int64(req.BasePrice * 100)), // Convert dollars to cents for Stripe
+				Quantity: stripe.Int64(1),
 			},
-			Quantity: stripe.Int64(1),
-		},
-	}
+		}
 
-	// Prepare metadata
-	metadata := map[string]string{
-		"user_id":    req.UserID,
-		"plan_id":    req.PlanID.String(),
-		"base_price": fmt.Sprintf("%.2f", req.BasePrice), // Store as dollars in metadata
-		"currency":   req.Currency,
-	}
+		// Prepare metadata
+		metadata := map[string]string{
+			"user_id":    req.UserID,
+			"plan_id":    req.PlanID.String(),
+			"base_price": fmt.Sprintf("%.2f", req.BasePrice), // Store as dollars in metadata
+			"currency":   req.Currency,
+		}
 
-	if req.FamilyID != nil {
-		metadata["family_id"] = *req.FamilyID
-	}
+		if req.FamilyID != nil {
+			metadata["family_id"] = *req.FamilyID
+		}
 
-	if req.CountryCode != "" {
-		metadata["country_code"] = req.CountryCode
-	}
+		if req.CountryCode != "" {
+			metadata["country_code"] = req.CountryCode
+		}
 
-	// Create checkout session parameters
-	params := &stripe.CheckoutSessionParams{
-		PaymentMethodTypes: stripe.StringSlice([]string{"card"}),
-		LineItems:          lineItems,
-		Mode:               stripe.String(string(stripe.CheckoutSessionModePayment)),
-		SuccessURL:         stripe.String(req.SuccessURL),
-		CancelURL:          stripe.String(req.CancelURL),
-		Metadata:           metadata,
-		ExpiresAt:          stripe.Int64(time.Now().Add(24 * time.Hour).Unix()),
-	}
+		// Create checkout session parameters
+		params := &stripe.CheckoutSessionParams{
+			PaymentMethodTypes: stripe.StringSlice([]string{"card"}),
+			LineItems:          lineItems,
+			Mode:               stripe.String(string(stripe.CheckoutSessionModePayment)),
+			SuccessURL:         stripe.String(req.SuccessURL),
+			CancelURL:          stripe.String(req.CancelURL),
+			Metadata:           metadata,
+			ExpiresAt:          stripe.Int64(time.Now().Add(24 * time.Hour).Unix()),
+		}
 
-	// Create the session
-	session, err := session.New(params)
-	if err != nil {
-		a.logger.Error("Failed to create Stripe checkout session",
-			zap.Error(err),
+		// Create the session
+		session, err := session.New(params)
+		if err != nil {
+			a.logger.Error("Failed to create Stripe checkout session",
+				zap.Error(err),
+				zap.String("plan_id", req.PlanID.String()),
+				zap.String("user_id", req.UserID))
+			return nil, fmt.Errorf("failed to create checkout session: %w", err)
+		}
+
+		a.logger.Info("Created Stripe checkout session",
+			zap.String("session_id", session.ID),
 			zap.String("plan_id", req.PlanID.String()),
-			zap.String("user_id", req.UserID))
-		return nil, fmt.Errorf("failed to create checkout session: %w", err)
-	}
+			zap.String("user_id", req.UserID),
+			zap.String("family_id", getStringValue(req.FamilyID)),
+			zap.String("success_url", req.SuccessURL),
+			zap.String("cancel_url", req.CancelURL),
+			zap.String("checkout_url", session.URL))
 
-	a.logger.Info("Created Stripe checkout session",
-		zap.String("session_id", session.ID),
-		zap.String("plan_id", req.PlanID.String()),
-		zap.String("user_id", req.UserID),
-		zap.String("family_id", getStringValue(req.FamilyID)),
-		zap.String("success_url", req.SuccessURL),
-		zap.String("cancel_url", req.CancelURL),
-		zap.String("checkout_url", session.URL))
+		// Convert to our response format
+		result = &billing.CreateCheckoutSessionResponse{
+			SessionID: session.ID,
+			URL:       session.URL,
+			ExpiresAt: time.Unix(session.ExpiresAt, 0),
+		}
 
-	return &billing.CreateCheckoutSessionResponse{
-		SessionID: session.ID,
-		URL:       session.URL,
-		ExpiresAt: time.Unix(session.ExpiresAt, 0),
-	}, nil
+		return result, nil
+	})
+
+	return result, err
 }
 
 // GetSession retrieves a Stripe checkout session
@@ -206,12 +219,11 @@ func (a *Adapter) handleCustomWebhookPayload(payload map[string]interface{}) (*b
 	sessionID, _ := payload["session_id"].(string)
 	userID, _ := payload["user_id"].(string)
 	planIDStr, _ := payload["plan_id"].(string)
-	featureCode, _ := payload["feature_code"].(string)
 	amount, _ := payload["amount"].(float64)
 	currency, _ := payload["currency"].(string)
 	status, _ := payload["status"].(string)
 
-	if userID == "" || planIDStr == "" || featureCode == "" {
+	if userID == "" || planIDStr == "" {
 		return nil, fmt.Errorf("missing required fields in custom webhook payload")
 	}
 
@@ -233,7 +245,7 @@ func (a *Adapter) handleCustomWebhookPayload(payload map[string]interface{}) (*b
 		EventType:    string(billing.WebhookEventTypeCheckoutSessionCompleted),
 		SessionID:    sessionID,
 		UserID:       userID,
-		FeatureCode:  featureCode,
+		FeatureCode:  "", // Will be determined from plan
 		PlanID:       planID,
 		PlanIDString: planIDStr, // Store original plan ID string
 		Amount:       amount,
@@ -254,7 +266,6 @@ func (a *Adapter) handleCustomWebhookPayload(payload map[string]interface{}) (*b
 		zap.String("session_id", sessionID),
 		zap.String("user_id", userID),
 		zap.String("plan_id", planIDStr),
-		zap.String("feature_code", featureCode),
 		zap.Float64("amount", amount),
 		zap.String("currency", currency),
 		zap.String("status", status))

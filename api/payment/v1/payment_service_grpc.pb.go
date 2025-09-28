@@ -28,6 +28,7 @@ const (
 	PaymentService_ProcessWebhook_FullMethodName        = "/payment.v1.PaymentService/ProcessWebhook"
 	PaymentService_ListEntitlements_FullMethodName      = "/payment.v1.PaymentService/ListEntitlements"
 	PaymentService_CheckEntitlement_FullMethodName      = "/payment.v1.PaymentService/CheckEntitlement"
+	PaymentService_BulkCheckEntitlements_FullMethodName = "/payment.v1.PaymentService/BulkCheckEntitlements"
 	PaymentService_ListPricingZones_FullMethodName      = "/payment.v1.PaymentService/ListPricingZones"
 )
 
@@ -55,6 +56,8 @@ type PaymentServiceClient interface {
 	ListEntitlements(ctx context.Context, in *ListEntitlementsRequest, opts ...grpc.CallOption) (*ListEntitlementsResponse, error)
 	// CheckEntitlement checks if a user has access to a feature
 	CheckEntitlement(ctx context.Context, in *CheckEntitlementRequest, opts ...grpc.CallOption) (*CheckEntitlementResponse, error)
+	// BulkCheckEntitlements checks multiple entitlements in a single request
+	BulkCheckEntitlements(ctx context.Context, in *BulkCheckEntitlementsRequest, opts ...grpc.CallOption) (*BulkCheckEntitlementsResponse, error)
 	// ListPricingZones retrieves all pricing zones
 	ListPricingZones(ctx context.Context, in *ListPricingZonesRequest, opts ...grpc.CallOption) (*ListPricingZonesResponse, error)
 }
@@ -157,6 +160,16 @@ func (c *paymentServiceClient) CheckEntitlement(ctx context.Context, in *CheckEn
 	return out, nil
 }
 
+func (c *paymentServiceClient) BulkCheckEntitlements(ctx context.Context, in *BulkCheckEntitlementsRequest, opts ...grpc.CallOption) (*BulkCheckEntitlementsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BulkCheckEntitlementsResponse)
+	err := c.cc.Invoke(ctx, PaymentService_BulkCheckEntitlements_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *paymentServiceClient) ListPricingZones(ctx context.Context, in *ListPricingZonesRequest, opts ...grpc.CallOption) (*ListPricingZonesResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListPricingZonesResponse)
@@ -191,6 +204,8 @@ type PaymentServiceServer interface {
 	ListEntitlements(context.Context, *ListEntitlementsRequest) (*ListEntitlementsResponse, error)
 	// CheckEntitlement checks if a user has access to a feature
 	CheckEntitlement(context.Context, *CheckEntitlementRequest) (*CheckEntitlementResponse, error)
+	// BulkCheckEntitlements checks multiple entitlements in a single request
+	BulkCheckEntitlements(context.Context, *BulkCheckEntitlementsRequest) (*BulkCheckEntitlementsResponse, error)
 	// ListPricingZones retrieves all pricing zones
 	ListPricingZones(context.Context, *ListPricingZonesRequest) (*ListPricingZonesResponse, error)
 	mustEmbedUnimplementedPaymentServiceServer()
@@ -229,6 +244,9 @@ func (UnimplementedPaymentServiceServer) ListEntitlements(context.Context, *List
 }
 func (UnimplementedPaymentServiceServer) CheckEntitlement(context.Context, *CheckEntitlementRequest) (*CheckEntitlementResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CheckEntitlement not implemented")
+}
+func (UnimplementedPaymentServiceServer) BulkCheckEntitlements(context.Context, *BulkCheckEntitlementsRequest) (*BulkCheckEntitlementsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BulkCheckEntitlements not implemented")
 }
 func (UnimplementedPaymentServiceServer) ListPricingZones(context.Context, *ListPricingZonesRequest) (*ListPricingZonesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListPricingZones not implemented")
@@ -416,6 +434,24 @@ func _PaymentService_CheckEntitlement_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PaymentService_BulkCheckEntitlements_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BulkCheckEntitlementsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PaymentServiceServer).BulkCheckEntitlements(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PaymentService_BulkCheckEntitlements_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PaymentServiceServer).BulkCheckEntitlements(ctx, req.(*BulkCheckEntitlementsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PaymentService_ListPricingZones_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListPricingZonesRequest)
 	if err := dec(in); err != nil {
@@ -476,6 +512,10 @@ var PaymentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CheckEntitlement",
 			Handler:    _PaymentService_CheckEntitlement_Handler,
+		},
+		{
+			MethodName: "BulkCheckEntitlements",
+			Handler:    _PaymentService_BulkCheckEntitlements_Handler,
 		},
 		{
 			MethodName: "ListPricingZones",

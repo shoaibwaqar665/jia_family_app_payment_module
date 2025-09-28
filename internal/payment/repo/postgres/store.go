@@ -262,8 +262,29 @@ type planRepository struct {
 
 // GetByID retrieves a plan by ID
 func (r *planRepository) GetByID(ctx context.Context, id string) (domain.Plan, error) {
-	// TODO: Implement with sqlc generated queries
-	return domain.Plan{}, fmt.Errorf("not implemented")
+	dbPlan, err := r.store.queries.GetPlanByID(ctx, r.store.db, id)
+	if err != nil {
+		return domain.Plan{}, fmt.Errorf("failed to get plan by ID: %w", err)
+	}
+
+	// Convert to domain model
+	planID := uuid.NewSHA1(uuid.NameSpaceOID, []byte(dbPlan.ID))
+
+	return domain.Plan{
+		ID:           planID,
+		Name:         dbPlan.Name,
+		Description:  dbPlan.Description.String,
+		FeatureCodes: dbPlan.FeatureCodes,
+		BillingCycle: dbPlan.BillingCycle.String,
+		PriceDollars: float64(dbPlan.PriceCents) / 100, // Convert cents to dollars
+		Currency:     dbPlan.Currency,
+		MaxUsers:     dbPlan.MaxUsers.Int32,
+		UsageLimits:  dbPlan.UsageLimits,
+		Metadata:     dbPlan.Metadata,
+		Active:       dbPlan.Active,
+		CreatedAt:    dbPlan.CreatedAt.Time,
+		UpdatedAt:    dbPlan.UpdatedAt.Time,
+	}, nil
 }
 
 // ListActive retrieves all active plans
@@ -488,6 +509,128 @@ func (r *entitlementRepository) UpdateExpiry(ctx context.Context, id string, exp
 	}
 
 	return nil
+}
+
+// GetBySubscriptionID retrieves entitlements by subscription ID
+func (r *entitlementRepository) GetBySubscriptionID(ctx context.Context, subscriptionID string) ([]domain.Entitlement, error) {
+	entitlements, err := r.store.queries.GetEntitlementsBySubscriptionID(ctx, r.store.db, pgtype.Text{String: subscriptionID, Valid: true})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get entitlements by subscription ID: %w", err)
+	}
+
+	var result []domain.Entitlement
+	for _, ent := range entitlements {
+		// Handle both UUID and string plan IDs
+		var planID uuid.UUID
+		if parsedUUID, err := uuid.Parse(ent.PlanID); err == nil {
+			planID = parsedUUID
+		} else {
+			// It's a string plan ID, generate a deterministic UUID
+			planID = uuid.NewSHA1(uuid.NameSpaceOID, []byte(ent.PlanID))
+		}
+
+		domainEnt := domain.Entitlement{
+			ID:          ent.ID.Bytes,
+			UserID:      ent.UserID,
+			FeatureCode: ent.FeatureCode,
+			PlanID:      planID,
+			Status:      ent.Status,
+			GrantedAt:   ent.GrantedAt.Time,
+			CreatedAt:   ent.CreatedAt.Time,
+			UpdatedAt:   ent.UpdatedAt.Time,
+		}
+
+		// Handle optional fields
+		if ent.FamilyID.Valid {
+			domainEnt.FamilyID = &ent.FamilyID.String
+		}
+		if ent.SubscriptionID.Valid {
+			domainEnt.SubscriptionID = &ent.SubscriptionID.String
+		}
+		if ent.ExpiresAt.Valid {
+			domainEnt.ExpiresAt = &ent.ExpiresAt.Time
+		}
+
+		result = append(result, domainEnt)
+	}
+
+	return result, nil
+}
+
+// Update updates an entitlement
+func (r *entitlementRepository) Update(ctx context.Context, e domain.Entitlement) (domain.Entitlement, error) {
+	entitlementUUID, err := uuid.Parse(e.ID.String())
+	if err != nil {
+		return domain.Entitlement{}, fmt.Errorf("invalid entitlement ID: %w", err)
+	}
+
+	// For now, we'll use a hardcoded mapping since the domain model uses UUID but DB expects string
+	planIDString := e.PlanID.String()
+	switch e.PlanID.String() {
+	case uuid.NewSHA1(uuid.NameSpaceOID, []byte("basic_monthly")).String():
+		planIDString = "basic_monthly"
+	case uuid.NewSHA1(uuid.NameSpaceOID, []byte("pro_monthly")).String():
+		planIDString = "pro_monthly"
+	case uuid.NewSHA1(uuid.NameSpaceOID, []byte("family_monthly")).String():
+		planIDString = "family_monthly"
+	}
+
+	params := pgstore.UpdateEntitlementParams{
+		ID:          pgtype.UUID{Bytes: entitlementUUID, Valid: true},
+		UserID:      e.UserID,
+		FeatureCode: e.FeatureCode,
+		PlanID:      planIDString,
+		Status:      e.Status,
+		GrantedAt:   pgtype.Timestamp{Time: e.GrantedAt, Valid: true},
+	}
+
+	// Handle optional fields
+	if e.FamilyID != nil {
+		params.FamilyID = pgtype.Text{String: *e.FamilyID, Valid: true}
+	}
+	if e.SubscriptionID != nil {
+		params.SubscriptionID = pgtype.Text{String: *e.SubscriptionID, Valid: true}
+	}
+	if e.ExpiresAt != nil {
+		params.ExpiresAt = pgtype.Timestamp{Time: *e.ExpiresAt, Valid: true}
+	}
+
+	entitlement, err := r.store.queries.UpdateEntitlement(ctx, r.store.db, params)
+	if err != nil {
+		return domain.Entitlement{}, fmt.Errorf("failed to update entitlement: %w", err)
+	}
+
+	// Convert back to domain model
+	var resultPlanID uuid.UUID
+	if parsedUUID, err := uuid.Parse(entitlement.PlanID); err == nil {
+		resultPlanID = parsedUUID
+	} else {
+		resultPlanID = uuid.NewSHA1(uuid.NameSpaceOID, []byte(entitlement.PlanID))
+	}
+
+	result := domain.Entitlement{
+		ID:          entitlement.ID.Bytes,
+		UserID:      entitlement.UserID,
+		FeatureCode: entitlement.FeatureCode,
+		PlanID:      resultPlanID,
+		Status:      entitlement.Status,
+		GrantedAt:   entitlement.GrantedAt.Time,
+		CreatedAt:   entitlement.CreatedAt.Time,
+		UpdatedAt:   entitlement.UpdatedAt.Time,
+	}
+
+	// Handle optional fields
+	if entitlement.FamilyID.Valid {
+		result.FamilyID = &entitlement.FamilyID.String
+	}
+	if entitlement.SubscriptionID.Valid {
+		result.SubscriptionID = &entitlement.SubscriptionID.String
+	}
+	if entitlement.ExpiresAt.Valid {
+		result.ExpiresAt = &entitlement.ExpiresAt.Time
+	}
+
+	return result, nil
 }
 
 // pricingZoneRepository implements repository.PricingZoneRepository

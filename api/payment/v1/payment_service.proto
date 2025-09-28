@@ -35,6 +35,9 @@ service PaymentService {
   // CheckEntitlement checks if a user has access to a feature
   rpc CheckEntitlement(CheckEntitlementRequest) returns (CheckEntitlementResponse);
   
+  // BulkCheckEntitlements checks multiple entitlements in a single request
+  rpc BulkCheckEntitlements(BulkCheckEntitlementsRequest) returns (BulkCheckEntitlementsResponse);
+  
   // ListPricingZones retrieves all pricing zones
   rpc ListPricingZones(ListPricingZonesRequest) returns (ListPricingZonesResponse);
 }
@@ -225,4 +228,44 @@ message PricingZone {
   double pricing_multiplier = 6;        // Pricing multiplier
   google.protobuf.Timestamp created_at = 7;   // Creation timestamp
   google.protobuf.Timestamp updated_at = 8;   // Last update timestamp
+}
+
+// BulkCheckEntitlementsRequest represents a request for bulk entitlement checking
+message BulkCheckEntitlementsRequest {
+  string user_id = 1;                   // User identifier
+  repeated BulkCheckItem checks = 2;    // List of entitlement checks
+}
+
+// BulkCheckItem represents a single entitlement check
+message BulkCheckItem {
+  string feature_code = 1;              // Feature code to check
+  string operation = 2;                 // Specific operation (optional)
+  int64 resource_size = 3;              // Resource size for quota checks (optional)
+  map<string, string> metadata = 4;     // Additional metadata (optional)
+}
+
+// BulkCheckEntitlementsResponse represents the response from bulk entitlement checking
+message BulkCheckEntitlementsResponse {
+  repeated BulkCheckResult results = 1; // Results for each check
+  BulkCheckSummary summary = 2;          // Summary statistics
+}
+
+// BulkCheckResult represents the result of a single entitlement check
+message BulkCheckResult {
+  string feature_code = 1;              // Feature code that was checked
+  bool authorized = 2;                  // Whether the user is authorized
+  Entitlement entitlement = 3;          // Entitlement details (if authorized)
+  string reason = 4;                    // Reason for denial (if not authorized)
+  string upgrade_url = 5;               // Upgrade URL (if not authorized)
+  map<string, string> metadata = 6;     // Additional metadata
+}
+
+// BulkCheckSummary provides summary statistics for bulk checks
+message BulkCheckSummary {
+  int32 total_checks = 1;               // Total number of checks performed
+  int32 authorized = 2;                 // Number of authorized checks
+  int32 not_authorized = 3;             // Number of not authorized checks
+  int32 cache_hits = 4;                 // Number of cache hits
+  int32 cache_misses = 5;               // Number of cache misses
+  int64 processing_time_ms = 6;         // Processing time in milliseconds
 }
