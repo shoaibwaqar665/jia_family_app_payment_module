@@ -2,30 +2,30 @@
 const CONFIG = {
     API_BASE_URL: 'http://localhost:8082/api',
     STRIPE_PUBLISHABLE_KEY: 'pk_test_51PAonXSHVQMYbf3sSPa2xq688zX7w0c5PXJvKRhAE2uDXFz6wHNLQlskbY3pRIGPkEMEkbCYUCMbQfnIOVrMvV4v00P8vXcviw',
-    AUTH_TOKEN: 'spiff_id_test_user_123',
-    USER_ID: 'spiff_id_test_user_123'
+    AUTH_TOKEN: 'test_user_123',
+    USER_ID: 'test_user_123'
 };
 
-// Plan configurations with UUID plan IDs
+// Plan configurations with database plan IDs
 const PLANS = {
     basic_monthly: {
         name: 'Basic Plan',
-        planId: '550e8400-e29b-41d4-a716-446655440001', // UUID for basic plan
-        basePrice: 999, // $9.99 in cents
+        planId: 'basic_monthly', // Database plan ID
+        basePrice: 9.99, // $9.99 in dollars
         currency: 'USD',
         features: ['basic_storage', 'basic_support', 'core_features']
     },
     pro_monthly: {
         name: 'Pro Plan',
-        planId: '550e8400-e29b-41d4-a716-446655440002', // UUID for pro plan
-        basePrice: 1999, // $19.99 in cents
+        planId: 'pro_monthly', // Database plan ID
+        basePrice: 19.99, // $19.99 in dollars
         currency: 'USD',
         features: ['pro_storage', 'pro_support', 'core_features', 'advanced_analytics', 'api_access']
     },
     family_monthly: {
         name: 'Family Plan',
-        planId: '550e8400-e29b-41d4-a716-446655440003', // UUID for family plan
-        basePrice: 2999, // $29.99 in cents
+        planId: 'family_monthly', // Database plan ID
+        basePrice: 29.99, // $29.99 in dollars
         currency: 'USD',
         features: ['family_storage', 'family_support', 'core_features', 'family_sharing', 'parental_controls']
     }
@@ -167,7 +167,7 @@ function updatePricing() {
     const zone = PRICING_ZONES[country];
     const plan = PLANS[selectedPlan];
     
-    const adjustedPrice = Math.round(plan.basePrice * zone.multiplier);
+    const adjustedPrice = plan.basePrice * zone.multiplier;
     
     // Update UI
     document.getElementById('pricingZone').textContent = `${zone.name} (${zone.multiplier}x)`;
@@ -175,8 +175,8 @@ function updatePricing() {
 }
 
 // Format price for display
-function formatPrice(priceInCents) {
-    return `$${(priceInCents / 100).toFixed(2)}`;
+function formatPrice(priceInDollars) {
+    return `$${priceInDollars.toFixed(2)}`;
 }
 
 // Go back to plan selection
@@ -203,7 +203,7 @@ async function processPayment() {
         const familyId = document.getElementById('familyId').value;
         const plan = PLANS[selectedPlan];
         const zone = PRICING_ZONES[country];
-        const adjustedPrice = Math.round(plan.basePrice * zone.multiplier);
+        const adjustedPrice = plan.basePrice * zone.multiplier;
         
         // Create checkout session
         const sessionResponse = await createCheckoutSession({
@@ -250,7 +250,7 @@ async function createCheckoutSession(data) {
                 country_code: data.countryCode,
                 base_price: data.basePrice,
                 currency: data.currency,
-                success_url: `${window.location.origin}/`,
+                success_url: `${window.location.origin}/success?session_id={CHECKOUT_SESSION_ID}&user_id=${CONFIG.USER_ID}`,
                 cancel_url: `${window.location.origin}/`
             })
         });
@@ -261,11 +261,6 @@ async function createCheckoutSession(data) {
         }
 
         const result = await response.json();
-        
-        // For POC, we'll simulate a successful payment after redirect
-        setTimeout(() => {
-            simulatePaymentSuccess(data, result.session_id);
-        }, 3000);
         
         return {
             success: true,
@@ -317,7 +312,7 @@ function showPaymentStatus(status, details) {
         statusIcon.textContent = '✅';
         statusIcon.className = 'status-icon success';
         statusTitle.textContent = 'Payment Successful!';
-        statusMessage.textContent = 'Your payment has been processed successfully.';
+        statusMessage.textContent = 'Your payment has been processed successfully. Your entitlement is being created...';
         
         statusDetails.innerHTML = `
             <h4>Payment Details</h4>
@@ -328,6 +323,9 @@ function showPaymentStatus(status, details) {
             <p><strong>Status:</strong> Completed</p>
         `;
         
+        // Change button text and behavior for success
+        statusButton.textContent = 'View Your Entitlements';
+        statusButton.onclick = showEntitlements;
         statusButton.style.display = 'block';
         
     } else if (status === 'error') {
@@ -341,6 +339,9 @@ function showPaymentStatus(status, details) {
             <p>${details.error || 'Unknown error occurred'}</p>
         `;
         
+        // Keep original button behavior for errors
+        statusButton.textContent = 'Start New Payment';
+        statusButton.onclick = resetFlow;
         statusButton.style.display = 'block';
     }
     
@@ -354,62 +355,76 @@ async function createEntitlement(data, sessionId) {
         // Simulate webhook processing
         await new Promise(resolve => setTimeout(resolve, 2000));
         
-        // Create entitlement record
-        const entitlement = {
-            id: generateRandomId(),
-            userId: data.userId,
-            familyId: data.familyId,
-            featureCode: PLANS[data.planId].features[0], // Use first feature
-            planId: data.planId,
-            subscriptionId: sessionId,
-            status: 'active',
-            grantedAt: new Date().toISOString(),
-            expiresAt: null, // Lifetime for this POC
+        // First, call the webhook endpoint to process payment completion
+        const webhookPayload = {
+            session_id: sessionId,
+            user_id: data.userId,
+            plan_id: data.planId,
+            feature_code: PLANS[data.planId].features[0], // Use first feature
             amount: data.adjustedPrice,
-            currency: data.currency
+            currency: data.currency,
+            status: 'completed',
+            expires_at: null, // Lifetime for this POC
+            metadata: {
+                family_id: data.familyId,
+                country_code: data.countryCode,
+                base_price: data.basePrice,
+                adjusted_price: data.adjustedPrice
+            }
         };
         
-        // Store in localStorage for demo purposes
-        const entitlements = JSON.parse(localStorage.getItem('entitlements') || '[]');
-        entitlements.push(entitlement);
-        localStorage.setItem('entitlements', JSON.stringify(entitlements));
+        // Call webhook endpoint to process payment completion
+        const webhookResponse = await fetch(`${CONFIG.API_BASE_URL}/webhook`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'better-auth-token': CONFIG.AUTH_TOKEN
+            },
+            body: JSON.stringify({
+                payload: webhookPayload, // Send as object, not string
+                signature: 'test_signature_' + sessionId, // Mock signature for POC
+                provider: 'stripe' // Add provider field
+            })
+        });
         
-        showToast('Entitlement created successfully!', 'success');
+        if (!webhookResponse.ok) {
+            throw new Error(`Webhook failed: ${webhookResponse.status}`);
+        }
+        
+        const webhookResult = await webhookResponse.json();
+        console.log('Webhook processed:', webhookResult);
+        
+        showToast('Payment processed and entitlement created successfully! Redirecting to entitlements...', 'success');
+        
+        // Update status message to show completion
+        const statusMessage = document.getElementById('statusMessage');
+        if (statusMessage) {
+            statusMessage.textContent = 'Your entitlement has been created successfully!';
+        }
+        
+        // Redirect to entitlements page after successful creation
+        setTimeout(() => {
+            showEntitlements();
+        }, 2000); // Wait 2 seconds to show the success message
         
     } catch (error) {
         console.error('Entitlement creation error:', error);
-        showToast('Failed to create entitlement: ' + error.message, 'error');
+        showToast('Failed to process payment completion: ' + error.message, 'error');
     }
 }
 
 // Show entitlements
-function showEntitlements() {
-    const entitlements = JSON.parse(localStorage.getItem('entitlements') || '[]');
+async function showEntitlements() {
     const entitlementsSection = document.getElementById('entitlementsSection');
     const entitlementsContainer = document.getElementById('entitlementsContainer');
     
-    if (entitlements.length === 0) {
-        entitlementsContainer.innerHTML = `
-            <div class="entitlement-card">
-                <h3>No Entitlements</h3>
-                <p>You don't have any active entitlements yet. Purchase a plan to get started!</p>
-            </div>
-        `;
-    } else {
-        entitlementsContainer.innerHTML = entitlements.map(entitlement => `
-            <div class="entitlement-card">
-                <h3>${PLANS[entitlement.planId]?.name || entitlement.planId}</h3>
-                <div class="entitlement-details">
-                    <p><strong>Feature:</strong> ${entitlement.featureCode}</p>
-                    <p><strong>Amount:</strong> ${formatPrice(entitlement.amount)} ${entitlement.currency}</p>
-                    <p><strong>Granted:</strong> ${new Date(entitlement.grantedAt).toLocaleDateString()}</p>
-                    <p><strong>Expires:</strong> ${entitlement.expiresAt ? new Date(entitlement.expiresAt).toLocaleDateString() : 'Never'}</p>
-                    <p><strong>Subscription ID:</strong> ${entitlement.subscriptionId}</p>
-                </div>
-                <span class="entitlement-status">${entitlement.status}</span>
-            </div>
-        `).join('');
-    }
+    // Show loading state
+    entitlementsContainer.innerHTML = `
+        <div class="entitlement-card">
+            <h3>Loading Entitlements...</h3>
+            <p>Please wait while we fetch your entitlements...</p>
+        </div>
+    `;
     
     // Hide other sections
     document.querySelector('.plans-section').style.display = 'none';
@@ -419,6 +434,70 @@ function showEntitlements() {
     // Show entitlements section
     entitlementsSection.style.display = 'block';
     entitlementsSection.scrollIntoView({ behavior: 'smooth' });
+    
+    // Show success message if coming from payment completion
+    showToast('Welcome to your entitlements! Here are your active subscriptions.', 'success');
+    
+    try {
+        // Call the API to get entitlements
+        const response = await fetch(`${CONFIG.API_BASE_URL}/entitlements?user_id=${CONFIG.USER_ID}`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'better-auth-token': CONFIG.AUTH_TOKEN
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        const entitlements = data.entitlements || [];
+        
+        if (entitlements.length === 0) {
+            entitlementsContainer.innerHTML = `
+                <div class="entitlement-card">
+                    <h3>No Entitlements</h3>
+                    <p>You don't have any active entitlements yet. Purchase a plan to get started!</p>
+                </div>
+            `;
+        } else {
+            entitlementsContainer.innerHTML = entitlements.map(entitlement => {
+                // Get plan name from UUID
+                const planName = getPlanNameFromUUID(entitlement.plan_id);
+                
+                // Convert timestamp to readable date
+                const grantedAt = new Date(entitlement.granted_at.seconds * 1000);
+                const expiresAt = entitlement.expires_at ? new Date(entitlement.expires_at.seconds * 1000) : null;
+                
+                return `
+                    <div class="entitlement-card">
+                        <h3>${planName}</h3>
+                        <div class="entitlement-details">
+                            <p><strong>Feature:</strong> ${entitlement.feature_code}</p>
+                            <p><strong>Status:</strong> ${entitlement.status}</p>
+                            <p><strong>Granted:</strong> ${grantedAt.toLocaleDateString()}</p>
+                            <p><strong>Expires:</strong> ${expiresAt ? expiresAt.toLocaleDateString() : 'Never'}</p>
+                            ${entitlement.subscription_id ? `<p><strong>Subscription ID:</strong> ${entitlement.subscription_id}</p>` : ''}
+                            ${entitlement.family_id ? `<p><strong>Family ID:</strong> ${entitlement.family_id}</p>` : ''}
+                        </div>
+                        <span class="entitlement-status">${entitlement.status}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+    } catch (error) {
+        console.error('Failed to fetch entitlements:', error);
+        entitlementsContainer.innerHTML = `
+            <div class="entitlement-card">
+                <h3>Error Loading Entitlements</h3>
+                <p>Failed to load entitlements: ${error.message}</p>
+                <button onclick="showEntitlements()" class="btn-primary">Retry</button>
+            </div>
+        `;
+    }
 }
 
 // Reset the flow
@@ -458,6 +537,18 @@ function showToast(message, type = 'success') {
 // Generate random ID
 function generateRandomId() {
     return Math.random().toString(36).substr(2, 9);
+}
+
+// Map UUID plan IDs back to plan names
+function getPlanNameFromUUID(uuidPlanId) {
+    // These are the deterministic UUIDs generated by the backend
+    const uuidToPlanMap = {
+        'f6845cd0-dda8-57af-8d1a-27a45d76b96a': 'Basic Plan', // basic_monthly
+        'a1b2c3d4-e5f6-7890-abcd-ef1234567890': 'Pro Plan',   // pro_monthly (example)
+        'b2c3d4e5-f6g7-8901-bcde-f23456789012': 'Family Plan' // family_monthly (example)
+    };
+    
+    return uuidToPlanMap[uuidPlanId] || uuidPlanId;
 }
 
 // API helper functions
@@ -500,6 +591,20 @@ async function testApiConnection() {
 
 // Initialize API test on load
 document.addEventListener('DOMContentLoaded', function() {
+    // Load pricing zones
+    loadPricingZones();
+    
+    // Check if we should show entitlements (from success page redirect)
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('show_entitlements') === 'true') {
+        // Clear the URL parameter
+        window.history.replaceState({}, document.title, window.location.pathname);
+        // Show entitlements after a short delay to ensure page is loaded
+        setTimeout(() => {
+            showEntitlements();
+        }, 500);
+    }
+    
     // Test API connection after a short delay
     setTimeout(testApiConnection, 1000);
 });

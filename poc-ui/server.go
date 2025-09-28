@@ -40,14 +40,33 @@ type CheckoutResponse struct {
 }
 
 type WebhookRequest struct {
-	Payload   []byte `json:"payload"`
-	Signature string `json:"signature"`
-	Provider  string `json:"provider"`
+	Payload   interface{} `json:"payload"`
+	Signature string      `json:"signature"`
+	Provider  string      `json:"provider"`
 }
 
 type WebhookResponse struct {
 	Success bool   `json:"success"`
 	Message string `json:"message"`
+}
+
+type CreateEntitlementRequest struct {
+	UserID         string                 `json:"user_id"`
+	FamilyID       string                 `json:"family_id,omitempty"`
+	FeatureCode    string                 `json:"feature_code"`
+	PlanID         string                 `json:"plan_id"`
+	SubscriptionID string                 `json:"subscription_id,omitempty"`
+	Status         string                 `json:"status"`
+	GrantedAt      string                 `json:"granted_at"`
+	ExpiresAt      *string                `json:"expires_at,omitempty"`
+	UsageLimits    map[string]interface{} `json:"usage_limits,omitempty"`
+	Metadata       map[string]interface{} `json:"metadata,omitempty"`
+}
+
+type CreateEntitlementResponse struct {
+	Success       bool   `json:"success"`
+	Message       string `json:"message"`
+	EntitlementID string `json:"entitlement_id,omitempty"`
 }
 
 func main() {
@@ -78,11 +97,22 @@ func main() {
 	})
 
 	http.HandleFunc("/api/entitlements", func(w http.ResponseWriter, r *http.Request) {
-		handleListEntitlements(w, r, client)
+		if r.Method == http.MethodGet {
+			handleListEntitlements(w, r, client)
+		} else if r.Method == http.MethodPost {
+			handleCreateEntitlement(w, r, client)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
 	})
 
 	http.HandleFunc("/api/pricing-zones", func(w http.ResponseWriter, r *http.Request) {
 		handleListPricingZones(w, r, client)
+	})
+
+	// Handle payment success page
+	http.HandleFunc("/success", func(w http.ResponseWriter, r *http.Request) {
+		handlePaymentSuccess(w, r, client)
 	})
 
 	// Serve static files
@@ -167,9 +197,16 @@ func handleWebhook(w http.ResponseWriter, r *http.Request, client paymentv1.Paym
 		return
 	}
 
+	// Convert payload to bytes
+	payloadBytes, err := json.Marshal(req.Payload)
+	if err != nil {
+		http.Error(w, "Failed to marshal payload", http.StatusBadRequest)
+		return
+	}
+
 	// Convert to gRPC request
 	grpcReq := &paymentv1.ProcessWebhookRequest{
-		Payload:   req.Payload,
+		Payload:   payloadBytes,
 		Signature: req.Signature,
 		Provider:  req.Provider,
 	}
@@ -360,6 +397,262 @@ func handleListEntitlements(w http.ResponseWriter, r *http.Request, client payme
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
+}
+
+func handleCreateEntitlement(w http.ResponseWriter, r *http.Request, client paymentv1.PaymentServiceClient) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req CreateEntitlementRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	// Validate required fields
+	if req.UserID == "" || req.FeatureCode == "" || req.PlanID == "" {
+		http.Error(w, "Missing required fields: user_id, feature_code, plan_id", http.StatusBadRequest)
+		return
+	}
+
+	// Create a webhook payload to simulate entitlement creation
+	webhookPayload := map[string]interface{}{
+		"session_id":   req.SubscriptionID,
+		"user_id":      req.UserID,
+		"plan_id":      req.PlanID,
+		"feature_code": req.FeatureCode,
+		"amount":       19.99, // Default amount
+		"currency":     "USD",
+		"status":       req.Status,
+		"expires_at":   req.ExpiresAt,
+		"metadata": map[string]interface{}{
+			"family_id":      req.FamilyID,
+			"country_code":   "US",
+			"base_price":     19.99,
+			"adjusted_price": 19.99,
+		},
+	}
+
+	// Convert payload to bytes
+	payloadBytes, err := json.Marshal(webhookPayload)
+	if err != nil {
+		http.Error(w, "Failed to marshal webhook payload", http.StatusInternalServerError)
+		return
+	}
+
+	// Call gRPC service
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Add authentication metadata
+	md := metadata.New(map[string]string{
+		"better-auth-token": r.Header.Get("better-auth-token"),
+	})
+	ctx = metadata.NewOutgoingContext(ctx, md)
+
+	// Convert to gRPC request
+	grpcReq := &paymentv1.ProcessWebhookRequest{
+		Payload:   payloadBytes,
+		Signature: "direct_entitlement_creation",
+		Provider:  "stripe",
+	}
+
+	resp, err := client.ProcessWebhook(ctx, grpcReq)
+	if err != nil {
+		log.Printf("gRPC error: %v", err)
+		http.Error(w, fmt.Sprintf("Failed to create entitlement: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Convert response
+	response := CreateEntitlementResponse{
+		Success:       resp.Success,
+		Message:       resp.Message,
+		EntitlementID: "created_via_webhook", // We don't have the actual ID from webhook
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+func handlePaymentSuccess(w http.ResponseWriter, r *http.Request, client paymentv1.PaymentServiceClient) {
+	// Get session_id from query parameters
+	sessionID := r.URL.Query().Get("session_id")
+	if sessionID == "" {
+		http.Error(w, "Missing session_id parameter", http.StatusBadRequest)
+		return
+	}
+
+	// Get user_id from query parameters or auth token
+	userID := r.URL.Query().Get("user_id")
+	if userID == "" {
+		userID = r.Header.Get("better-auth-token")
+	}
+	if userID == "" {
+		userID = "test_user_123" // Default for POC
+	}
+
+	// Create a webhook payload to simulate payment completion
+	webhookPayload := map[string]interface{}{
+		"session_id":   sessionID,
+		"user_id":      userID,
+		"plan_id":      "pro_monthly", // Default plan for POC
+		"feature_code": "pro_storage",
+		"amount":       19.99,
+		"currency":     "USD",
+		"status":       "completed",
+		"expires_at":   nil,
+		"metadata": map[string]interface{}{
+			"family_id":      "success_page_family",
+			"country_code":   "US",
+			"base_price":     19.99,
+			"adjusted_price": 19.99,
+		},
+	}
+
+	// Convert payload to bytes
+	payloadBytes, err := json.Marshal(webhookPayload)
+	if err != nil {
+		http.Error(w, "Failed to marshal webhook payload", http.StatusInternalServerError)
+		return
+	}
+
+	// Call gRPC service to process webhook
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Add authentication metadata
+	md := metadata.New(map[string]string{
+		"better-auth-token": userID,
+	})
+	ctx = metadata.NewOutgoingContext(ctx, md)
+
+	// Convert to gRPC request
+	grpcReq := &paymentv1.ProcessWebhookRequest{
+		Payload:   payloadBytes,
+		Signature: "success_page_signature_" + sessionID,
+		Provider:  "stripe",
+	}
+
+	_, err = client.ProcessWebhook(ctx, grpcReq)
+	if err != nil {
+		log.Printf("Webhook processing error: %v", err)
+		// Still show success page even if webhook fails
+	}
+
+	// Serve success page with automatic redirect to entitlements
+	successPageHTML := `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment Successful - Jia Family App</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%%, #764ba2 100%%);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .success-container {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            max-width: 500px;
+            width: 90%%;
+        }
+        .success-icon {
+            font-size: 4rem;
+            color: #48bb78;
+            margin-bottom: 20px;
+        }
+        .success-title {
+            font-size: 2rem;
+            color: #2d3748;
+            margin-bottom: 15px;
+        }
+        .success-message {
+            font-size: 1.1rem;
+            color: #718096;
+            margin-bottom: 30px;
+        }
+        .redirect-message {
+            font-size: 0.9rem;
+            color: #a0aec0;
+            margin-bottom: 20px;
+        }
+        .btn {
+            background: #667eea;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            margin: 0 10px;
+        }
+        .btn:hover {
+            background: #5a67d8;
+        }
+        .btn-secondary {
+            background: #e2e8f0;
+            color: #4a5568;
+        }
+        .btn-secondary:hover {
+            background: #cbd5e0;
+        }
+    </style>
+</head>
+<body>
+    <div class="success-container">
+        <div class="success-icon">✅</div>
+        <h1 class="success-title">Payment Successful!</h1>
+        <p class="success-message">Your payment has been processed successfully and your entitlement has been created.</p>
+        <p class="redirect-message">Redirecting to your entitlements in <span id="countdown">3</span> seconds...</p>
+        <div>
+            <a href="/" class="btn btn-secondary">Back to Plans</a>
+            <a href="/" onclick="showEntitlements(); return false;" class="btn">View Entitlements</a>
+        </div>
+    </div>
+
+    <script>
+        // Countdown timer
+        let countdown = 3;
+        const countdownElement = document.getElementById('countdown');
+        
+        const timer = setInterval(() => {
+            countdown--;
+            countdownElement.textContent = countdown;
+            
+            if (countdown <= 0) {
+                clearInterval(timer);
+                // Redirect to entitlements page with a flag
+                window.location.href = '/?show_entitlements=true';
+            }
+        }, 1000);
+
+        // Function to show entitlements
+        function showEntitlements() {
+            window.location.href = '/?show_entitlements=true';
+        }
+    </script>
+</body>
+</html>
+`
+
+	w.Header().Set("Content-Type", "text/html")
+	w.Write([]byte(successPageHTML))
 }
 
 func handleListPricingZones(w http.ResponseWriter, r *http.Request, client paymentv1.PaymentServiceClient) {

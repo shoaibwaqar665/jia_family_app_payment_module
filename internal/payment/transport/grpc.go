@@ -199,10 +199,17 @@ func (s *PaymentService) ListPayments(ctx context.Context, req *paymentv1.ListPa
 
 // CreateCheckoutSession creates a checkout session for payment
 func (s *PaymentService) CreateCheckoutSession(ctx context.Context, req *paymentv1.CreateCheckoutSessionRequest) (*paymentv1.CreateCheckoutSessionResponse, error) {
-	// Convert plan ID to UUID
-	planID, err := uuid.Parse(req.PlanId)
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid plan_id")
+	// Convert plan ID to UUID (handle both UUID and string plan IDs)
+	var planID uuid.UUID
+	if parsedUUID, err := uuid.Parse(req.PlanId); err == nil {
+		// It's a valid UUID
+		planID = parsedUUID
+	} else {
+		// It's a string plan ID, generate a deterministic UUID
+		planID = uuid.NewSHA1(uuid.NameSpaceOID, []byte(req.PlanId))
+		log.Info(ctx, "Converted string plan ID to UUID",
+			zap.String("plan_id_string", req.PlanId),
+			zap.String("plan_id_uuid", planID.String()))
 	}
 
 	// Calculate adjusted price based on country code

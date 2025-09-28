@@ -24,6 +24,7 @@ type CheckoutUseCase struct {
 	planRepo             repo.PlanRepository
 	entitlementRepo      repo.EntitlementRepository
 	pricingZoneRepo      repo.PricingZoneRepository
+	paymentRepo          repo.PaymentRepository
 	cache                *cache.Cache // Can be nil if Redis is not available
 	entitlementPublisher events.EntitlementPublisher
 }
@@ -33,6 +34,7 @@ func NewCheckoutUseCase(
 	planRepo repo.PlanRepository,
 	entitlementRepo repo.EntitlementRepository,
 	pricingZoneRepo repo.PricingZoneRepository,
+	paymentRepo repo.PaymentRepository,
 	cache *cache.Cache,
 	entitlementPublisher events.EntitlementPublisher,
 ) *CheckoutUseCase {
@@ -40,6 +42,7 @@ func NewCheckoutUseCase(
 		planRepo:             planRepo,
 		entitlementRepo:      entitlementRepo,
 		pricingZoneRepo:      pricingZoneRepo,
+		paymentRepo:          paymentRepo,
 		cache:                cache,
 		entitlementPublisher: entitlementPublisher,
 	}
@@ -156,6 +159,43 @@ func (uc *CheckoutUseCase) ApplyWebhook(ctx context.Context, wr billing.WebhookR
 	savedEntitlement, err := uc.entitlementRepo.Insert(ctx, entitlement)
 	if err != nil {
 		return status.Errorf(codes.Internal, "failed to upsert entitlement: %v", err)
+	}
+
+	// Update payment status to completed if session ID is provided
+	if wr.SessionID != "" {
+		log.Info(ctx, "Attempting to update payment status",
+			zap.String("session_id", wr.SessionID),
+			zap.String("user_id", wr.UserID),
+			zap.String("feature_code", wr.FeatureCode))
+
+		// Find payment by order ID (session ID)
+		payment, err := uc.paymentRepo.GetByOrderID(ctx, wr.SessionID)
+		if err == nil && payment != nil {
+			log.Info(ctx, "Found payment for session ID",
+				zap.String("payment_id", payment.ID.String()),
+				zap.String("session_id", wr.SessionID),
+				zap.String("current_status", payment.Status))
+
+			// Update payment status to completed
+			if err := uc.paymentRepo.UpdateStatus(ctx, payment.ID.String(), "completed"); err != nil {
+				log.Error(ctx, "Failed to update payment status",
+					zap.String("payment_id", payment.ID.String()),
+					zap.String("session_id", wr.SessionID),
+					zap.Error(err))
+			} else {
+				log.Info(ctx, "Payment status updated to completed",
+					zap.String("payment_id", payment.ID.String()),
+					zap.String("session_id", wr.SessionID))
+			}
+		} else {
+			log.Warn(ctx, "Payment not found for session ID",
+				zap.String("session_id", wr.SessionID),
+				zap.Error(err))
+		}
+	} else {
+		log.Warn(ctx, "No session ID provided in webhook result",
+			zap.String("user_id", wr.UserID),
+			zap.String("feature_code", wr.FeatureCode))
 	}
 
 	// Publish entitlement.updated event

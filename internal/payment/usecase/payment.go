@@ -107,6 +107,31 @@ func (uc *PaymentUseCase) UpdatePaymentStatus(ctx context.Context, id string, st
 	return nil
 }
 
+// CompletePayment marks a payment as completed after successful processing
+func (uc *PaymentUseCase) CompletePayment(ctx context.Context, id string, externalPaymentID string) error {
+	// Update payment status to completed
+	if err := uc.UpdatePaymentStatus(ctx, id, string(domain.PaymentStatusCompleted)); err != nil {
+		return fmt.Errorf("failed to complete payment: %w", err)
+	}
+
+	// Update external payment ID if provided
+	if externalPaymentID != "" {
+		payment, err := uc.paymentRepo.GetByID(ctx, id)
+		if err != nil {
+			return fmt.Errorf("failed to get payment: %w", err)
+		}
+
+		payment.ExternalPaymentID = externalPaymentID
+		payment.UpdatedAt = time.Now()
+
+		if err := uc.paymentRepo.Update(ctx, payment); err != nil {
+			return fmt.Errorf("failed to update payment with external ID: %w", err)
+		}
+	}
+
+	return nil
+}
+
 // GetPaymentsByCustomer retrieves payments for a customer
 func (uc *PaymentUseCase) GetPaymentsByCustomer(ctx context.Context, customerID string, limit, offset int) ([]*domain.PaymentResponse, error) {
 	payments, err := uc.paymentRepo.GetByCustomerID(ctx, customerID, limit, offset)

@@ -88,7 +88,7 @@ type paymentRepository struct {
 // Create creates a new payment
 func (r *paymentRepository) Create(ctx context.Context, payment *domain.Payment) error {
 	params := pgstore.CreatePaymentParams{
-		Amount:            pgtype.Numeric{Int: big.NewInt(int64(payment.Amount * 100)), Valid: true}, // Convert dollars to cents for pgtype.Numeric
+		Amount:            pgtype.Numeric{Int: big.NewInt(int64(payment.Amount * 100)), Exp: -2, Valid: true}, // Store as dollars with 2 decimal places
 		Currency:          payment.Currency,
 		Status:            payment.Status,
 		PaymentMethod:     payment.PaymentMethod,
@@ -168,7 +168,7 @@ func (r *paymentRepository) GetByCustomerID(ctx context.Context, customerID stri
 func (r *paymentRepository) Update(ctx context.Context, payment *domain.Payment) error {
 	params := pgstore.UpdatePaymentParams{
 		ID:                pgtype.UUID{Bytes: payment.ID, Valid: true},
-		Amount:            pgtype.Numeric{Int: big.NewInt(int64(payment.Amount * 100)), Valid: true}, // Convert dollars to cents for pgtype.Numeric
+		Amount:            pgtype.Numeric{Int: big.NewInt(int64(payment.Amount * 100)), Exp: -2, Valid: true}, // Store as dollars with 2 decimal places
 		Currency:          payment.Currency,
 		Status:            payment.Status,
 		PaymentMethod:     payment.PaymentMethod,
@@ -279,8 +279,51 @@ type entitlementRepository struct {
 
 // Check checks if a user has an active entitlement for a feature
 func (r *entitlementRepository) Check(ctx context.Context, userID, featureCode string) (domain.Entitlement, bool, error) {
-	// TODO: Implement with sqlc generated queries
-	return domain.Entitlement{}, false, fmt.Errorf("not implemented")
+	entitlement, err := r.store.queries.CheckEntitlement(ctx, r.store.db, pgstore.CheckEntitlementParams{
+		UserID:      userID,
+		FeatureCode: featureCode,
+	})
+	if err != nil {
+		// Check if it's a "no rows" error
+		if err.Error() == "no rows in result set" {
+			return domain.Entitlement{}, false, nil
+		}
+		return domain.Entitlement{}, false, fmt.Errorf("failed to check entitlement: %w", err)
+	}
+
+	// Convert to domain model
+	// Handle both UUID and string plan IDs
+	var planID uuid.UUID
+	if parsedUUID, err := uuid.Parse(entitlement.PlanID); err == nil {
+		planID = parsedUUID
+	} else {
+		// It's a string plan ID, generate a deterministic UUID
+		planID = uuid.NewSHA1(uuid.NameSpaceOID, []byte(entitlement.PlanID))
+	}
+
+	result := domain.Entitlement{
+		ID:          entitlement.ID.Bytes,
+		UserID:      entitlement.UserID,
+		FeatureCode: entitlement.FeatureCode,
+		PlanID:      planID,
+		Status:      entitlement.Status,
+		GrantedAt:   entitlement.GrantedAt.Time,
+		CreatedAt:   entitlement.CreatedAt.Time,
+		UpdatedAt:   entitlement.UpdatedAt.Time,
+	}
+
+	// Handle optional fields
+	if entitlement.FamilyID.Valid {
+		result.FamilyID = &entitlement.FamilyID.String
+	}
+	if entitlement.SubscriptionID.Valid {
+		result.SubscriptionID = &entitlement.SubscriptionID.String
+	}
+	if entitlement.ExpiresAt.Valid {
+		result.ExpiresAt = &entitlement.ExpiresAt.Time
+	}
+
+	return result, true, nil
 }
 
 // ListByUser retrieves all entitlements for a user
@@ -408,14 +451,43 @@ func (r *entitlementRepository) Insert(ctx context.Context, e domain.Entitlement
 
 // UpdateStatus updates the status of an entitlement
 func (r *entitlementRepository) UpdateStatus(ctx context.Context, id, status string) error {
-	// TODO: Implement with sqlc generated queries
-	return fmt.Errorf("not implemented")
+	entitlementUUID, err := uuid.Parse(id)
+	if err != nil {
+		return fmt.Errorf("invalid entitlement ID: %w", err)
+	}
+
+	_, err = r.store.queries.UpdateEntitlementStatus(ctx, r.store.db, pgstore.UpdateEntitlementStatusParams{
+		ID:     pgtype.UUID{Bytes: entitlementUUID, Valid: true},
+		Status: status,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to update entitlement status: %w", err)
+	}
+
+	return nil
 }
 
 // UpdateExpiry updates the expiry time of an entitlement
 func (r *entitlementRepository) UpdateExpiry(ctx context.Context, id string, expiresAt *time.Time) error {
-	// TODO: Implement with sqlc generated queries
-	return fmt.Errorf("not implemented")
+	entitlementUUID, err := uuid.Parse(id)
+	if err != nil {
+		return fmt.Errorf("invalid entitlement ID: %w", err)
+	}
+
+	var expiresAtParam pgtype.Timestamp
+	if expiresAt != nil {
+		expiresAtParam = pgtype.Timestamp{Time: *expiresAt, Valid: true}
+	}
+
+	_, err = r.store.queries.UpdateEntitlementExpiry(ctx, r.store.db, pgstore.UpdateEntitlementExpiryParams{
+		ID:        pgtype.UUID{Bytes: entitlementUUID, Valid: true},
+		ExpiresAt: expiresAtParam,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to update entitlement expiry: %w", err)
+	}
+
+	return nil
 }
 
 // pricingZoneRepository implements repository.PricingZoneRepository
@@ -566,7 +638,7 @@ func convertPaymentFromDB(dbPayment *pgstore.Payment) *domain.Payment {
 	var amount float64
 	if dbPayment.Amount.Valid {
 		if val, err := dbPayment.Amount.Float64Value(); err == nil {
-			amount = val.Float64 / 100.0 // Convert cents back to dollars
+			amount = val.Float64 // Already in dollars
 		}
 	}
 

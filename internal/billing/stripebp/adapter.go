@@ -167,7 +167,16 @@ func (a *Adapter) ValidateWebhook(ctx context.Context, payload []byte, signature
 
 // ParseWebhook parses a Stripe webhook payload
 func (a *Adapter) ParseWebhook(ctx context.Context, payload []byte) (*billing.WebhookResult, error) {
-	// Parse the webhook event
+	// First try to parse as a custom webhook payload (for POC)
+	var customPayload map[string]interface{}
+	if err := json.Unmarshal(payload, &customPayload); err == nil {
+		// Check if this is a custom webhook payload
+		if _, ok := customPayload["session_id"].(string); ok {
+			return a.handleCustomWebhookPayload(customPayload)
+		}
+	}
+
+	// Parse the webhook event as Stripe event
 	var event stripe.Event
 	if err := json.Unmarshal(payload, &event); err != nil {
 		a.logger.Error("Failed to parse webhook payload", zap.Error(err))
@@ -190,6 +199,67 @@ func (a *Adapter) ParseWebhook(ctx context.Context, payload []byte) (*billing.We
 		a.logger.Info("Unhandled webhook event type", zap.String("event_type", string(event.Type)))
 		return nil, fmt.Errorf("unhandled event type: %s", event.Type)
 	}
+}
+
+// handleCustomWebhookPayload handles custom webhook payloads from POC
+func (a *Adapter) handleCustomWebhookPayload(payload map[string]interface{}) (*billing.WebhookResult, error) {
+	sessionID, _ := payload["session_id"].(string)
+	userID, _ := payload["user_id"].(string)
+	planIDStr, _ := payload["plan_id"].(string)
+	featureCode, _ := payload["feature_code"].(string)
+	amount, _ := payload["amount"].(float64)
+	currency, _ := payload["currency"].(string)
+	status, _ := payload["status"].(string)
+
+	if userID == "" || planIDStr == "" || featureCode == "" {
+		return nil, fmt.Errorf("missing required fields in custom webhook payload")
+	}
+
+	// Handle both UUID and string plan IDs
+	var planID uuid.UUID
+	if parsedUUID, err := uuid.Parse(planIDStr); err == nil {
+		// It's a valid UUID
+		planID = parsedUUID
+	} else {
+		// It's a string plan ID, generate a deterministic UUID
+		planID = uuid.NewSHA1(uuid.NameSpaceOID, []byte(planIDStr))
+	}
+
+	if currency == "" {
+		currency = "USD"
+	}
+
+	result := &billing.WebhookResult{
+		EventType:    string(billing.WebhookEventTypeCheckoutSessionCompleted),
+		SessionID:    sessionID,
+		UserID:       userID,
+		FeatureCode:  featureCode,
+		PlanID:       planID,
+		PlanIDString: planIDStr, // Store original plan ID string
+		Amount:       amount,
+		Currency:     currency,
+		Status:       status,
+		ExpiresAt:    nil, // Lifetime for this POC
+		Metadata:     payload,
+	}
+
+	// Handle optional family ID
+	if familyID, ok := payload["metadata"].(map[string]interface{}); ok {
+		if fid, ok := familyID["family_id"].(string); ok && fid != "" {
+			result.FamilyID = &fid
+		}
+	}
+
+	a.logger.Info("Processed custom webhook payload",
+		zap.String("session_id", sessionID),
+		zap.String("user_id", userID),
+		zap.String("plan_id", planIDStr),
+		zap.String("feature_code", featureCode),
+		zap.Float64("amount", amount),
+		zap.String("currency", currency),
+		zap.String("status", status))
+
+	return result, nil
 }
 
 // handleCheckoutSessionCompleted handles checkout.session.completed events

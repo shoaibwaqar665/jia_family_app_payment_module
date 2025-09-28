@@ -134,7 +134,7 @@ func BootstrapAndServe(ctx context.Context) error {
 	// Initialize use cases
 	paymentUseCase := usecase.NewPaymentUseCase(repo.Payment())
 	entitlementUseCase := usecase.NewEntitlementUseCase(repo.Entitlement(), cacheClient, entitlementPublisher)
-	checkoutUseCase := usecase.NewCheckoutUseCase(repo.Plan(), repo.Entitlement(), repo.PricingZone(), cacheClient, entitlementPublisher)
+	checkoutUseCase := usecase.NewCheckoutUseCase(repo.Plan(), repo.Entitlement(), repo.PricingZone(), repo.Payment(), cacheClient, entitlementPublisher)
 	pricingZoneUseCase := usecase.NewPricingZoneUseCase(repo.PricingZone())
 
 	paymentService := transport.NewPaymentService(
