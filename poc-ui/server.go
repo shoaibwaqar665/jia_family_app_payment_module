@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
@@ -20,6 +22,12 @@ import (
 const (
 	grpcAddress = "localhost:8081"
 	httpPort    = ":8082"
+	dbHost      = "ep-wild-wave-a1nsn7ul.ap-southeast-1.aws.neon.tech"
+	dbPort      = 5432
+	dbUser      = "neondb_owner"
+	dbPassword  = "sLdJyF0w2Unv"
+	dbName      = "jia_family_app"
+	dbSslMode   = "require"
 )
 
 type CheckoutRequest struct {
@@ -69,7 +77,57 @@ type CreateEntitlementResponse struct {
 	EntitlementID string `json:"entitlement_id,omitempty"`
 }
 
+// Admin request/response types
+type UpdatePlanRequest struct {
+	ID           string   `json:"id"`
+	Name         string   `json:"name,omitempty"`
+	Description  string   `json:"description,omitempty"`
+	FeatureCodes []string `json:"feature_codes,omitempty"`
+	BillingCycle string   `json:"billing_cycle,omitempty"`
+	PriceCents   int32    `json:"price_cents,omitempty"`
+	Currency     string   `json:"currency,omitempty"`
+	MaxUsers     int32    `json:"max_users,omitempty"`
+	Active       bool     `json:"active,omitempty"`
+}
+
+type CreatePricingZoneRequest struct {
+	Country                 string  `json:"country"`
+	ISOCode                 string  `json:"iso_code"`
+	Zone                    string  `json:"zone"`
+	ZoneName                string  `json:"zone_name"`
+	WorldBankClassification string  `json:"world_bank_classification"`
+	GNIPerCapitaThreshold   string  `json:"gni_per_capita_threshold"`
+	PricingMultiplier       float64 `json:"pricing_multiplier"`
+}
+
+type UpdatePricingZoneRequest struct {
+	ID                      string  `json:"id"`
+	Country                 string  `json:"country,omitempty"`
+	ISOCode                 string  `json:"iso_code,omitempty"`
+	Zone                    string  `json:"zone,omitempty"`
+	ZoneName                string  `json:"zone_name,omitempty"`
+	WorldBankClassification string  `json:"world_bank_classification,omitempty"`
+	GNIPerCapitaThreshold   string  `json:"gni_per_capita_threshold,omitempty"`
+	PricingMultiplier       float64 `json:"pricing_multiplier,omitempty"`
+}
+
 func main() {
+	// Create database connection
+	dbConnStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=require",
+		dbHost, dbPort, dbUser, dbPassword, dbName)
+
+	db, err := sql.Open("postgres", dbConnStr)
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+	defer db.Close()
+
+	// Test database connection
+	if err := db.Ping(); err != nil {
+		log.Fatalf("Failed to ping database: %v", err)
+	}
+	log.Println("Database connection established")
+
 	// Create gRPC connection
 	conn, err := grpc.Dial(grpcAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -79,7 +137,7 @@ func main() {
 
 	client := paymentv1.NewPaymentServiceClient(conn)
 
-	// HTTP handlers
+	// Public HTTP handlers
 	http.HandleFunc("/api/checkout", func(w http.ResponseWriter, r *http.Request) {
 		handleCheckout(w, r, client)
 	})
@@ -110,6 +168,45 @@ func main() {
 		handleListPricingZones(w, r, client)
 	})
 
+	// Admin HTTP handlers
+	http.HandleFunc("/api/admin/plans", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			handleAdminListPlans(w, r, db)
+		case http.MethodPost:
+			handleAdminCreatePlan(w, r, db)
+		case http.MethodPut:
+			handleAdminUpdatePlan(w, r, db)
+		case http.MethodDelete:
+			handleAdminDeletePlan(w, r, db)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	http.HandleFunc("/api/admin/pricing-zones", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			handleAdminListPricingZones(w, r, db)
+		case http.MethodPost:
+			handleAdminCreatePricingZone(w, r, db)
+		case http.MethodPut:
+			handleAdminUpdatePricingZone(w, r, db)
+		case http.MethodDelete:
+			handleAdminDeletePricingZone(w, r, db)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	http.HandleFunc("/api/admin/purchases", func(w http.ResponseWriter, r *http.Request) {
+		handleAdminListPurchases(w, r, db)
+	})
+
+	http.HandleFunc("/api/admin/entitlements", func(w http.ResponseWriter, r *http.Request) {
+		handleAdminListEntitlements(w, r, db)
+	})
+
 	// Handle payment success page
 	http.HandleFunc("/success", func(w http.ResponseWriter, r *http.Request) {
 		handlePaymentSuccess(w, r, client)
@@ -120,6 +217,11 @@ func main() {
 
 	log.Printf("HTTP server starting on port %s", httpPort)
 	log.Printf("Serving POC UI at http://localhost%s", httpPort)
+	log.Println("Admin API available at:")
+	log.Println("  GET/POST/PUT/DELETE /api/admin/plans")
+	log.Println("  GET/POST/PUT/DELETE /api/admin/pricing-zones")
+	log.Println("  GET /api/admin/purchases")
+	log.Println("  GET /api/admin/entitlements")
 	log.Fatal(http.ListenAndServe(httpPort, nil))
 }
 
@@ -692,4 +794,555 @@ func handleListPricingZones(w http.ResponseWriter, r *http.Request, client payme
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
+}
+
+// ==================== ADMIN HANDLERS ====================
+
+// handleAdminListPlans - List all plans (admin view with all plans including inactive)
+func handleAdminListPlans(w http.ResponseWriter, r *http.Request, db *sql.DB) {
+	query := `SELECT id, name, description, feature_codes, billing_cycle, price_cents, 
+	          currency, max_users, usage_limits, metadata, active, created_at, updated_at 
+	          FROM plans ORDER BY created_at DESC`
+
+	rows, err := db.Query(query)
+	if err != nil {
+		log.Printf("Database error: %v", err)
+		http.Error(w, fmt.Sprintf("Failed to list plans: %v", err), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	plans := []map[string]interface{}{}
+	for rows.Next() {
+		var id, name, currency string
+		var description, billingCycle sql.NullString
+		var featureCodes []string
+		var priceCents, maxUsers sql.NullInt32
+		var usageLimits, metadata []byte
+		var active bool
+		var createdAt, updatedAt time.Time
+
+		err := rows.Scan(&id, &name, &description, pq.Array(&featureCodes), &billingCycle, &priceCents,
+			&currency, &maxUsers, &usageLimits, &metadata, &active, &createdAt, &updatedAt)
+		if err != nil {
+			log.Printf("Scan error: %v", err)
+			continue
+		}
+
+		plan := map[string]interface{}{
+			"id":         id,
+			"name":       name,
+			"currency":   currency,
+			"active":     active,
+			"created_at": createdAt,
+			"updated_at": updatedAt,
+		}
+
+		if description.Valid {
+			plan["description"] = description.String
+		}
+		if billingCycle.Valid {
+			plan["billing_cycle"] = billingCycle.String
+		}
+		if priceCents.Valid {
+			plan["price_cents"] = priceCents.Int32
+			plan["price_dollars"] = float64(priceCents.Int32) / 100.0
+		}
+		if maxUsers.Valid {
+			plan["max_users"] = maxUsers.Int32
+		}
+		if featureCodes != nil {
+			plan["feature_codes"] = featureCodes
+		}
+
+		plans = append(plans, plan)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"plans": plans,
+		"total": len(plans),
+	})
+}
+
+// handleAdminCreatePlan - Create a new plan
+func handleAdminCreatePlan(w http.ResponseWriter, r *http.Request, db *sql.DB) {
+	var req struct {
+		ID           string   `json:"id"`
+		Name         string   `json:"name"`
+		Description  string   `json:"description"`
+		FeatureCodes []string `json:"feature_codes"`
+		BillingCycle string   `json:"billing_cycle"`
+		PriceCents   int32    `json:"price_cents"`
+		Currency     string   `json:"currency"`
+		MaxUsers     int32    `json:"max_users"`
+		Active       bool     `json:"active"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	query := `INSERT INTO plans (id, name, description, feature_codes, billing_cycle, 
+	          price_cents, currency, max_users, active) 
+	          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`
+
+	var id string
+	err := db.QueryRow(query, req.ID, req.Name, req.Description, pq.Array(req.FeatureCodes), req.BillingCycle,
+		req.PriceCents, req.Currency, req.MaxUsers, req.Active).Scan(&id)
+
+	if err != nil {
+		log.Printf("Database error: %v", err)
+		http.Error(w, fmt.Sprintf("Failed to create plan: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Plan created successfully",
+		"id":      id,
+	})
+}
+
+// handleAdminUpdatePlan - Update an existing plan
+func handleAdminUpdatePlan(w http.ResponseWriter, r *http.Request, db *sql.DB) {
+	var req UpdatePlanRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	// Build dynamic update query
+	updates := []string{}
+	args := []interface{}{}
+	argPos := 1
+
+	if req.Name != "" {
+		updates = append(updates, fmt.Sprintf("name = $%d", argPos))
+		args = append(args, req.Name)
+		argPos++
+	}
+	if req.Description != "" {
+		updates = append(updates, fmt.Sprintf("description = $%d", argPos))
+		args = append(args, req.Description)
+		argPos++
+	}
+	if len(req.FeatureCodes) > 0 {
+		updates = append(updates, fmt.Sprintf("feature_codes = $%d", argPos))
+		args = append(args, pq.Array(req.FeatureCodes))
+		argPos++
+	}
+	if req.BillingCycle != "" {
+		updates = append(updates, fmt.Sprintf("billing_cycle = $%d", argPos))
+		args = append(args, req.BillingCycle)
+		argPos++
+	}
+	if req.PriceCents != 0 {
+		updates = append(updates, fmt.Sprintf("price_cents = $%d", argPos))
+		args = append(args, req.PriceCents)
+		argPos++
+	}
+	if req.Currency != "" {
+		updates = append(updates, fmt.Sprintf("currency = $%d", argPos))
+		args = append(args, req.Currency)
+		argPos++
+	}
+	if req.MaxUsers != 0 {
+		updates = append(updates, fmt.Sprintf("max_users = $%d", argPos))
+		args = append(args, req.MaxUsers)
+		argPos++
+	}
+
+	updates = append(updates, "updated_at = NOW()")
+	updates = append(updates, fmt.Sprintf("active = $%d", argPos))
+	args = append(args, req.Active)
+	argPos++
+
+	args = append(args, req.ID)
+
+	query := fmt.Sprintf("UPDATE plans SET %s WHERE id = $%d",
+		joinStrings(updates, ", "), argPos)
+
+	result, err := db.Exec(query, args...)
+	if err != nil {
+		log.Printf("Database error: %v", err)
+		http.Error(w, fmt.Sprintf("Failed to update plan: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":       rowsAffected > 0,
+		"message":       "Plan updated successfully",
+		"rows_affected": rowsAffected,
+	})
+}
+
+// handleAdminDeletePlan - Soft delete a plan (set active to false)
+func handleAdminDeletePlan(w http.ResponseWriter, r *http.Request, db *sql.DB) {
+	planID := r.URL.Query().Get("id")
+	if planID == "" {
+		http.Error(w, "Plan ID is required", http.StatusBadRequest)
+		return
+	}
+
+	query := "UPDATE plans SET active = false, updated_at = NOW() WHERE id = $1"
+	result, err := db.Exec(query, planID)
+	if err != nil {
+		log.Printf("Database error: %v", err)
+		http.Error(w, fmt.Sprintf("Failed to delete plan: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":       rowsAffected > 0,
+		"message":       "Plan deactivated successfully",
+		"rows_affected": rowsAffected,
+	})
+}
+
+// handleAdminListPricingZones - List all pricing zones
+func handleAdminListPricingZones(w http.ResponseWriter, r *http.Request, db *sql.DB) {
+	query := `SELECT id, country, iso_code, zone, zone_name, world_bank_classification,
+	          gni_per_capita_threshold, pricing_multiplier, created_at, updated_at 
+	          FROM pricing_zones ORDER BY zone, country`
+
+	rows, err := db.Query(query)
+	if err != nil {
+		log.Printf("Database error: %v", err)
+		http.Error(w, fmt.Sprintf("Failed to list pricing zones: %v", err), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	zones := []map[string]interface{}{}
+	for rows.Next() {
+		var id, country, isoCode, zone, zoneName, worldBankClass, gniThreshold string
+		var pricingMultiplier float64
+		var createdAt, updatedAt time.Time
+
+		err := rows.Scan(&id, &country, &isoCode, &zone, &zoneName, &worldBankClass,
+			&gniThreshold, &pricingMultiplier, &createdAt, &updatedAt)
+		if err != nil {
+			log.Printf("Scan error: %v", err)
+			continue
+		}
+
+		zones = append(zones, map[string]interface{}{
+			"id":                        id,
+			"country":                   country,
+			"iso_code":                  isoCode,
+			"zone":                      zone,
+			"zone_name":                 zoneName,
+			"world_bank_classification": worldBankClass,
+			"gni_per_capita_threshold":  gniThreshold,
+			"pricing_multiplier":        pricingMultiplier,
+			"created_at":                createdAt,
+			"updated_at":                updatedAt,
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"pricing_zones": zones,
+		"total":         len(zones),
+	})
+}
+
+// handleAdminCreatePricingZone - Create a new pricing zone
+func handleAdminCreatePricingZone(w http.ResponseWriter, r *http.Request, db *sql.DB) {
+	var req CreatePricingZoneRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	query := `INSERT INTO pricing_zones (country, iso_code, zone, zone_name, 
+	          world_bank_classification, gni_per_capita_threshold, pricing_multiplier) 
+	          VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`
+
+	var id string
+	err := db.QueryRow(query, req.Country, req.ISOCode, req.Zone, req.ZoneName,
+		req.WorldBankClassification, req.GNIPerCapitaThreshold, req.PricingMultiplier).Scan(&id)
+
+	if err != nil {
+		log.Printf("Database error: %v", err)
+		http.Error(w, fmt.Sprintf("Failed to create pricing zone: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Pricing zone created successfully",
+		"id":      id,
+	})
+}
+
+// handleAdminUpdatePricingZone - Update an existing pricing zone
+func handleAdminUpdatePricingZone(w http.ResponseWriter, r *http.Request, db *sql.DB) {
+	var req UpdatePricingZoneRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	// Build dynamic update query
+	updates := []string{}
+	args := []interface{}{}
+	argPos := 1
+
+	if req.Country != "" {
+		updates = append(updates, fmt.Sprintf("country = $%d", argPos))
+		args = append(args, req.Country)
+		argPos++
+	}
+	if req.ISOCode != "" {
+		updates = append(updates, fmt.Sprintf("iso_code = $%d", argPos))
+		args = append(args, req.ISOCode)
+		argPos++
+	}
+	if req.Zone != "" {
+		updates = append(updates, fmt.Sprintf("zone = $%d", argPos))
+		args = append(args, req.Zone)
+		argPos++
+	}
+	if req.ZoneName != "" {
+		updates = append(updates, fmt.Sprintf("zone_name = $%d", argPos))
+		args = append(args, req.ZoneName)
+		argPos++
+	}
+	if req.WorldBankClassification != "" {
+		updates = append(updates, fmt.Sprintf("world_bank_classification = $%d", argPos))
+		args = append(args, req.WorldBankClassification)
+		argPos++
+	}
+	if req.GNIPerCapitaThreshold != "" {
+		updates = append(updates, fmt.Sprintf("gni_per_capita_threshold = $%d", argPos))
+		args = append(args, req.GNIPerCapitaThreshold)
+		argPos++
+	}
+	if req.PricingMultiplier != 0 {
+		updates = append(updates, fmt.Sprintf("pricing_multiplier = $%d", argPos))
+		args = append(args, req.PricingMultiplier)
+		argPos++
+	}
+
+	updates = append(updates, "updated_at = NOW()")
+	args = append(args, req.ID)
+
+	query := fmt.Sprintf("UPDATE pricing_zones SET %s WHERE id = $%d",
+		joinStrings(updates, ", "), argPos)
+
+	result, err := db.Exec(query, args...)
+	if err != nil {
+		log.Printf("Database error: %v", err)
+		http.Error(w, fmt.Sprintf("Failed to update pricing zone: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":       rowsAffected > 0,
+		"message":       "Pricing zone updated successfully",
+		"rows_affected": rowsAffected,
+	})
+}
+
+// handleAdminDeletePricingZone - Delete a pricing zone
+func handleAdminDeletePricingZone(w http.ResponseWriter, r *http.Request, db *sql.DB) {
+	zoneID := r.URL.Query().Get("id")
+	if zoneID == "" {
+		http.Error(w, "Pricing zone ID is required", http.StatusBadRequest)
+		return
+	}
+
+	query := "DELETE FROM pricing_zones WHERE id = $1"
+	result, err := db.Exec(query, zoneID)
+	if err != nil {
+		log.Printf("Database error: %v", err)
+		http.Error(w, fmt.Sprintf("Failed to delete pricing zone: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":       rowsAffected > 0,
+		"message":       "Pricing zone deleted successfully",
+		"rows_affected": rowsAffected,
+	})
+}
+
+// handleAdminListPurchases - List all purchases/payments (admin view)
+func handleAdminListPurchases(w http.ResponseWriter, r *http.Request, db *sql.DB) {
+	// Parse pagination parameters
+	limit := 50
+	offset := 0
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if parsedLimit, err := strconv.Atoi(l); err == nil {
+			limit = parsedLimit
+		}
+	}
+	if o := r.URL.Query().Get("offset"); o != "" {
+		if parsedOffset, err := strconv.Atoi(o); err == nil {
+			offset = parsedOffset
+		}
+	}
+
+	query := `SELECT id, amount, currency, status, payment_method, customer_id, 
+	          order_id, description, external_payment_id, failure_reason, 
+	          created_at, updated_at 
+	          FROM payments 
+	          ORDER BY created_at DESC 
+	          LIMIT $1 OFFSET $2`
+
+	rows, err := db.Query(query, limit, offset)
+	if err != nil {
+		log.Printf("Database error: %v", err)
+		http.Error(w, fmt.Sprintf("Failed to list purchases: %v", err), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	purchases := []map[string]interface{}{}
+	for rows.Next() {
+		var id, currency, status, paymentMethod, customerID, orderID, description string
+		var externalPaymentID, failureReason sql.NullString
+		var amount float64
+		var createdAt, updatedAt time.Time
+
+		err := rows.Scan(&id, &amount, &currency, &status, &paymentMethod, &customerID,
+			&orderID, &description, &externalPaymentID, &failureReason, &createdAt, &updatedAt)
+		if err != nil {
+			log.Printf("Scan error: %v", err)
+			continue
+		}
+
+		purchase := map[string]interface{}{
+			"id":             id,
+			"amount":         amount,
+			"currency":       currency,
+			"status":         status,
+			"payment_method": paymentMethod,
+			"customer_id":    customerID,
+			"order_id":       orderID,
+			"description":    description,
+			"created_at":     createdAt,
+			"updated_at":     updatedAt,
+		}
+
+		if externalPaymentID.Valid {
+			purchase["external_payment_id"] = externalPaymentID.String
+		}
+		if failureReason.Valid {
+			purchase["failure_reason"] = failureReason.String
+		}
+
+		purchases = append(purchases, purchase)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"purchases": purchases,
+		"total":     len(purchases),
+		"limit":     limit,
+		"offset":    offset,
+	})
+}
+
+// handleAdminListEntitlements - List all entitlements (admin view)
+func handleAdminListEntitlements(w http.ResponseWriter, r *http.Request, db *sql.DB) {
+	// Parse pagination parameters
+	limit := 50
+	offset := 0
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if parsedLimit, err := strconv.Atoi(l); err == nil {
+			limit = parsedLimit
+		}
+	}
+	if o := r.URL.Query().Get("offset"); o != "" {
+		if parsedOffset, err := strconv.Atoi(o); err == nil {
+			offset = parsedOffset
+		}
+	}
+
+	query := `SELECT id, user_id, family_id, feature_code, plan_id, subscription_id,
+	          status, granted_at, expires_at, usage_limits, metadata, created_at, updated_at 
+	          FROM entitlements 
+	          ORDER BY created_at DESC 
+	          LIMIT $1 OFFSET $2`
+
+	rows, err := db.Query(query, limit, offset)
+	if err != nil {
+		log.Printf("Database error: %v", err)
+		http.Error(w, fmt.Sprintf("Failed to list entitlements: %v", err), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	entitlements := []map[string]interface{}{}
+	for rows.Next() {
+		var id, userID, featureCode, planID, status string
+		var familyID, subscriptionID sql.NullString
+		var usageLimits, metadata []byte
+		var grantedAt, createdAt, updatedAt time.Time
+		var expiresAt sql.NullTime
+
+		err := rows.Scan(&id, &userID, &familyID, &featureCode, &planID, &subscriptionID,
+			&status, &grantedAt, &expiresAt, &usageLimits, &metadata, &createdAt, &updatedAt)
+		if err != nil {
+			log.Printf("Scan error: %v", err)
+			continue
+		}
+
+		entitlement := map[string]interface{}{
+			"id":           id,
+			"user_id":      userID,
+			"feature_code": featureCode,
+			"plan_id":      planID,
+			"status":       status,
+			"granted_at":   grantedAt,
+			"created_at":   createdAt,
+			"updated_at":   updatedAt,
+		}
+
+		if familyID.Valid {
+			entitlement["family_id"] = familyID.String
+		}
+		if subscriptionID.Valid {
+			entitlement["subscription_id"] = subscriptionID.String
+		}
+		if expiresAt.Valid {
+			entitlement["expires_at"] = expiresAt.Time
+		}
+
+		entitlements = append(entitlements, entitlement)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"entitlements": entitlements,
+		"total":        len(entitlements),
+		"limit":        limit,
+		"offset":       offset,
+	})
+}
+
+// Helper function to join strings
+func joinStrings(strs []string, sep string) string {
+	if len(strs) == 0 {
+		return ""
+	}
+	result := strs[0]
+	for i := 1; i < len(strs); i++ {
+		result += sep + strs[i]
+	}
+	return result
 }

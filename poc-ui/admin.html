@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Jia Payment Service</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+        }
+
+        .tabs {
+            display: flex;
+            background: #f7fafc;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            border: none;
+            background: transparent;
+            font-size: 1rem;
+            font-weight: 600;
+            color: #718096;
+            transition: all 0.3s;
+        }
+
+        .tab:hover {
+            background: #edf2f7;
+        }
+
+        .tab.active {
+            color: #667eea;
+            border-bottom: 3px solid #667eea;
+            background: white;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .section {
+            margin-bottom: 40px;
+        }
+
+        .section h2 {
+            color: #2d3748;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #4a5568;
+            font-weight: 600;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5a67d8;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-danger {
+            background: #f56565;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #e53e3e;
+        }
+
+        .btn-secondary {
+            background: #e2e8f0;
+            color: #4a5568;
+        }
+
+        .btn-secondary:hover {
+            background: #cbd5e0;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .table-container {
+            overflow-x: auto;
+            border-radius: 8px;
+            border: 2px solid #e2e8f0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            background: #f7fafc;
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+            color: #2d3748;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        td {
+            padding: 15px;
+            border-bottom: 1px solid #e2e8f0;
+            color: #4a5568;
+        }
+
+        tr:hover {
+            background: #f7fafc;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+
+        .badge-success {
+            background: #c6f6d5;
+            color: #22543d;
+        }
+
+        .badge-danger {
+            background: #fed7d7;
+            color: #742a2a;
+        }
+
+        .badge-warning {
+            background: #feebc8;
+            color: #7c2d12;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+
+        .status-completed {
+            background: #c6f6d5;
+            color: #22543d;
+        }
+
+        .status-pending {
+            background: #feebc8;
+            color: #7c2d12;
+        }
+
+        .status-failed {
+            background: #fed7d7;
+            color: #742a2a;
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .alert-success {
+            background: #c6f6d5;
+            color: #22543d;
+            border: 1px solid #9ae6b4;
+        }
+
+        .alert-error {
+            background: #fed7d7;
+            color: #742a2a;
+            border: 1px solid #fc8181;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #718096;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #a0aec0;
+        }
+
+        .empty-state svg {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 8px;
+        }
+
+        .action-btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .action-btn-edit {
+            background: #667eea;
+            color: white;
+        }
+
+        .action-btn-edit:hover {
+            background: #5a67d8;
+        }
+
+        .action-btn-delete {
+            background: #f56565;
+            color: white;
+        }
+
+        .action-btn-delete:hover {
+            background: #e53e3e;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .card {
+            background: #f7fafc;
+            padding: 20px;
+            border-radius: 12px;
+            border: 2px solid #e2e8f0;
+        }
+
+        .card h3 {
+            color: #2d3748;
+            margin-bottom: 15px;
+        }
+
+        .feature-codes {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .feature-code {
+            background: #667eea;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-size: 0.875rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔐 Admin Dashboard</h1>
+            <p>Manage Plans, Pricing Zones, Purchases & Entitlements</p>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('plans')">Plans</button>
+            <button class="tab" onclick="switchTab('pricing-zones')">Pricing Zones</button>
+            <button class="tab" onclick="switchTab('purchases')">Purchases</button>
+            <button class="tab" onclick="switchTab('entitlements')">Entitlements</button>
+        </div>
+
+        <div class="content">
+            <!-- Plans Tab -->
+            <div id="plans-tab" class="tab-content active">
+                <div class="section">
+                    <h2>Create New Plan</h2>
+                    <form id="create-plan-form" onsubmit="createPlan(event)">
+                        <div class="grid">
+                            <div class="form-group">
+                                <label>Plan ID</label>
+                                <input type="text" name="id" required placeholder="e.g., premium_monthly">
+                            </div>
+                            <div class="form-group">
+                                <label>Plan Name</label>
+                                <input type="text" name="name" required placeholder="e.g., Premium Monthly">
+                            </div>
+                            <div class="form-group">
+                                <label>Price (cents)</label>
+                                <input type="number" name="price_cents" required placeholder="1999">
+                            </div>
+                            <div class="form-group">
+                                <label>Currency</label>
+                                <select name="currency" required>
+                                    <option value="USD">USD</option>
+                                    <option value="EUR">EUR</option>
+                                    <option value="GBP">GBP</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Billing Cycle</label>
+                                <select name="billing_cycle" required>
+                                    <option value="monthly">Monthly</option>
+                                    <option value="yearly">Yearly</option>
+                                    <option value="one_time">One Time</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Max Users</label>
+                                <input type="number" name="max_users" placeholder="1">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Description</label>
+                            <textarea name="description" rows="3" placeholder="Plan description..."></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Feature Codes (comma-separated)</label>
+                            <input type="text" name="feature_codes" placeholder="feature1, feature2, feature3">
+                        </div>
+                        <div class="form-group">
+                            <label>Active</label>
+                            <select name="active">
+                                <option value="true">Active</option>
+                                <option value="false">Inactive</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Create Plan</button>
+                    </form>
+                </div>
+
+                <div class="section">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h2>All Plans</h2>
+                        <button onclick="loadPlans()" class="btn btn-secondary">Refresh</button>
+                    </div>
+                    <div id="plans-list" class="loading">Loading plans...</div>
+                </div>
+            </div>
+
+            <!-- Pricing Zones Tab -->
+            <div id="pricing-zones-tab" class="tab-content">
+                <div class="section">
+                    <h2>Create New Pricing Zone</h2>
+                    <form id="create-zone-form" onsubmit="createPricingZone(event)">
+                        <div class="grid">
+                            <div class="form-group">
+                                <label>Country</label>
+                                <input type="text" name="country" required placeholder="e.g., United States">
+                            </div>
+                            <div class="form-group">
+                                <label>ISO Code</label>
+                                <input type="text" name="iso_code" required placeholder="e.g., US">
+                            </div>
+                            <div class="form-group">
+                                <label>Zone</label>
+                                <select name="zone" required>
+                                    <option value="A">A - Premium (100%)</option>
+                                    <option value="B">B - Mid-High (70%)</option>
+                                    <option value="C">C - Mid-Low (40%)</option>
+                                    <option value="D">D - Low-Income (20%)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Zone Name</label>
+                                <input type="text" name="zone_name" required placeholder="e.g., Premium">
+                            </div>
+                            <div class="form-group">
+                                <label>World Bank Classification</label>
+                                <input type="text" name="world_bank_classification" placeholder="High income">
+                            </div>
+                            <div class="form-group">
+                                <label>GNI Per Capita Threshold</label>
+                                <input type="text" name="gni_per_capita_threshold" placeholder="e.g., $12,536+">
+                            </div>
+                            <div class="form-group">
+                                <label>Pricing Multiplier</label>
+                                <input type="number" name="pricing_multiplier" step="0.01" required placeholder="1.00">
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Create Pricing Zone</button>
+                    </form>
+                </div>
+
+                <div class="section">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h2>All Pricing Zones</h2>
+                        <button onclick="loadPricingZones()" class="btn btn-secondary">Refresh</button>
+                    </div>
+                    <div id="zones-list" class="loading">Loading pricing zones...</div>
+                </div>
+            </div>
+
+            <!-- Purchases Tab -->
+            <div id="purchases-tab" class="tab-content">
+                <div class="section">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h2>All Purchases</h2>
+                        <button onclick="loadPurchases()" class="btn btn-secondary">Refresh</button>
+                    </div>
+                    <div id="purchases-list" class="loading">Loading purchases...</div>
+                </div>
+            </div>
+
+            <!-- Entitlements Tab -->
+            <div id="entitlements-tab" class="tab-content">
+                <div class="section">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h2>All Entitlements</h2>
+                        <button onclick="loadEntitlements()" class="btn btn-secondary">Refresh</button>
+                    </div>
+                    <div id="entitlements-list" class="loading">Loading entitlements...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8082/api/admin';
+
+        // Tab switching
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(`${tabName}-tab`).classList.add('active');
+
+            // Load data when switching tabs
+            if (tabName === 'plans') loadPlans();
+            if (tabName === 'pricing-zones') loadPricingZones();
+            if (tabName === 'purchases') loadPurchases();
+            if (tabName === 'entitlements') loadEntitlements();
+        }
+
+        // Load Plans
+        async function loadPlans() {
+            const container = document.getElementById('plans-list');
+            container.innerHTML = '<div class="loading">Loading plans...</div>';
+
+            try {
+                const response = await fetch(`${API_BASE}/plans`);
+                const data = await response.json();
+
+                if (data.plans && data.plans.length > 0) {
+                    container.innerHTML = `
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Name</th>
+                                        <th>Price</th>
+                                        <th>Currency</th>
+                                        <th>Billing Cycle</th>
+                                        <th>Max Users</th>
+                                        <th>Active</th>
+                                        <th>Features</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${data.plans.map(plan => `
+                                        <tr>
+                                            <td>${plan.id}</td>
+                                            <td>${plan.name}</td>
+                                            <td>$${(plan.price_dollars || 0).toFixed(2)}</td>
+                                            <td>${plan.currency}</td>
+                                            <td>${plan.billing_cycle || 'N/A'}</td>
+                                            <td>${plan.max_users || 'N/A'}</td>
+                                            <td>
+                                                <span class="badge ${plan.active ? 'badge-success' : 'badge-danger'}">
+                                                    ${plan.active ? 'Active' : 'Inactive'}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                ${plan.feature_codes ? plan.feature_codes.slice(0, 2).join(', ') + (plan.feature_codes.length > 2 ? '...' : '') : 'N/A'}
+                                            </td>
+                                            <td>
+                                                <div class="action-buttons">
+                                                    <button class="action-btn action-btn-edit" onclick="editPlan('${plan.id}')">Edit</button>
+                                                    <button class="action-btn action-btn-delete" onclick="deletePlan('${plan.id}')">Delete</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                } else {
+                    container.innerHTML = '<div class="empty-state">No plans found</div>';
+                }
+            } catch (error) {
+                container.innerHTML = `<div class="alert alert-error">Error loading plans: ${error.message}</div>`;
+            }
+        }
+
+        // Create Plan
+        async function createPlan(event) {
+            event.preventDefault();
+            const form = event.target;
+            const formData = new FormData(form);
+            const data = {
+                id: formData.get('id'),
+                name: formData.get('name'),
+                description: formData.get('description'),
+                feature_codes: formData.get('feature_codes').split(',').map(f => f.trim()).filter(f => f),
+                billing_cycle: formData.get('billing_cycle'),
+                price_cents: parseInt(formData.get('price_cents')),
+                currency: formData.get('currency'),
+                max_users: parseInt(formData.get('max_users')) || 1,
+                active: formData.get('active') === 'true'
+            };
+
+            try {
+                const response = await fetch(`${API_BASE}/plans`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+                if (response.ok) {
+                    alert('Plan created successfully!');
+                    form.reset();
+                    loadPlans();
+                } else {
+                    alert(`Error: ${result.message || 'Failed to create plan'}`);
+                }
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            }
+        }
+
+        // Delete Plan
+        async function deletePlan(planId) {
+            if (!confirm(`Are you sure you want to deactivate plan "${planId}"?`)) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/plans?id=${planId}`, {
+                    method: 'DELETE'
+                });
+
+                const result = await response.json();
+                if (response.ok) {
+                    alert('Plan deactivated successfully!');
+                    loadPlans();
+                } else {
+                    alert(`Error: ${result.message || 'Failed to delete plan'}`);
+                }
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            }
+        }
+
+        // Edit Plan (placeholder)
+        function editPlan(planId) {
+            alert(`Edit functionality for plan "${planId}" - Use PUT request to ${API_BASE}/plans`);
+        }
+
+        // Load Pricing Zones
+        async function loadPricingZones() {
+            const container = document.getElementById('zones-list');
+            container.innerHTML = '<div class="loading">Loading pricing zones...</div>';
+
+            try {
+                const response = await fetch(`${API_BASE}/pricing-zones`);
+                const data = await response.json();
+
+                if (data.pricing_zones && data.pricing_zones.length > 0) {
+                    container.innerHTML = `
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Country</th>
+                                        <th>ISO Code</th>
+                                        <th>Zone</th>
+                                        <th>Zone Name</th>
+                                        <th>Multiplier</th>
+                                        <th>World Bank</th>
+                                        <th>GNI Threshold</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${data.pricing_zones.map(zone => `
+                                        <tr>
+                                            <td>${zone.country}</td>
+                                            <td>${zone.iso_code}</td>
+                                            <td><span class="badge badge-warning">${zone.zone}</span></td>
+                                            <td>${zone.zone_name}</td>
+                                            <td>${(zone.pricing_multiplier * 100).toFixed(0)}%</td>
+                                            <td>${zone.world_bank_classification || 'N/A'}</td>
+                                            <td>${zone.gni_per_capita_threshold || 'N/A'}</td>
+                                            <td>
+                                                <div class="action-buttons">
+                                                    <button class="action-btn action-btn-edit" onclick="editZone('${zone.id}')">Edit</button>
+                                                    <button class="action-btn action-btn-delete" onclick="deleteZone('${zone.id}')">Delete</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                } else {
+                    container.innerHTML = '<div class="empty-state">No pricing zones found</div>';
+                }
+            } catch (error) {
+                container.innerHTML = `<div class="alert alert-error">Error loading pricing zones: ${error.message}</div>`;
+            }
+        }
+
+        // Create Pricing Zone
+        async function createPricingZone(event) {
+            event.preventDefault();
+            const form = event.target;
+            const formData = new FormData(form);
+            const data = {
+                country: formData.get('country'),
+                iso_code: formData.get('iso_code'),
+                zone: formData.get('zone'),
+                zone_name: formData.get('zone_name'),
+                world_bank_classification: formData.get('world_bank_classification'),
+                gni_per_capita_threshold: formData.get('gni_per_capita_threshold'),
+                pricing_multiplier: parseFloat(formData.get('pricing_multiplier'))
+            };
+
+            try {
+                const response = await fetch(`${API_BASE}/pricing-zones`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+                if (response.ok) {
+                    alert('Pricing zone created successfully!');
+                    form.reset();
+                    loadPricingZones();
+                } else {
+                    alert(`Error: ${result.message || 'Failed to create pricing zone'}`);
+                }
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            }
+        }
+
+        // Delete Pricing Zone
+        async function deleteZone(zoneId) {
+            if (!confirm('Are you sure you want to delete this pricing zone?')) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/pricing-zones?id=${zoneId}`, {
+                    method: 'DELETE'
+                });
+
+                const result = await response.json();
+                if (response.ok) {
+                    alert('Pricing zone deleted successfully!');
+                    loadPricingZones();
+                } else {
+                    alert(`Error: ${result.message || 'Failed to delete pricing zone'}`);
+                }
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            }
+        }
+
+        // Edit Zone (placeholder)
+        function editZone(zoneId) {
+            alert(`Edit functionality for zone "${zoneId}" - Use PUT request to ${API_BASE}/pricing-zones`);
+        }
+
+        // Load Purchases
+        async function loadPurchases() {
+            const container = document.getElementById('purchases-list');
+            container.innerHTML = '<div class="loading">Loading purchases...</div>';
+
+            try {
+                const response = await fetch(`${API_BASE}/purchases`);
+                const data = await response.json();
+
+                if (data.purchases && data.purchases.length > 0) {
+                    container.innerHTML = `
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Customer ID</th>
+                                        <th>Amount</th>
+                                        <th>Currency</th>
+                                        <th>Status</th>
+                                        <th>Payment Method</th>
+                                        <th>Description</th>
+                                        <th>Created At</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${data.purchases.map(purchase => `
+                                        <tr>
+                                            <td>${purchase.id.substring(0, 8)}...</td>
+                                            <td>${purchase.customer_id}</td>
+                                            <td>$${purchase.amount.toFixed(2)}</td>
+                                            <td>${purchase.currency}</td>
+                                            <td>
+                                                <span class="status-badge status-${purchase.status.toLowerCase()}">
+                                                    ${purchase.status}
+                                                </span>
+                                            </td>
+                                            <td>${purchase.payment_method || 'N/A'}</td>
+                                            <td>${purchase.description || 'N/A'}</td>
+                                            <td>${new Date(purchase.created_at).toLocaleString()}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                } else {
+                    container.innerHTML = '<div class="empty-state">No purchases found</div>';
+                }
+            } catch (error) {
+                container.innerHTML = `<div class="alert alert-error">Error loading purchases: ${error.message}</div>`;
+            }
+        }
+
+        // Load Entitlements
+        async function loadEntitlements() {
+            const container = document.getElementById('entitlements-list');
+            container.innerHTML = '<div class="loading">Loading entitlements...</div>';
+
+            try {
+                const response = await fetch(`${API_BASE}/entitlements`);
+                const data = await response.json();
+
+                if (data.entitlements && data.entitlements.length > 0) {
+                    container.innerHTML = `
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>User ID</th>
+                                        <th>Family ID</th>
+                                        <th>Feature Code</th>
+                                        <th>Plan ID</th>
+                                        <th>Status</th>
+                                        <th>Granted At</th>
+                                        <th>Expires At</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${data.entitlements.map(entitlement => `
+                                        <tr>
+                                            <td>${entitlement.id.substring(0, 8)}...</td>
+                                            <td>${entitlement.user_id}</td>
+                                            <td>${entitlement.family_id || 'N/A'}</td>
+                                            <td>${entitlement.feature_code}</td>
+                                            <td>${entitlement.plan_id}</td>
+                                            <td>
+                                                <span class="status-badge status-${entitlement.status.toLowerCase()}">
+                                                    ${entitlement.status}
+                                                </span>
+                                            </td>
+                                            <td>${new Date(entitlement.granted_at).toLocaleString()}</td>
+                                            <td>${entitlement.expires_at ? new Date(entitlement.expires_at).toLocaleString() : 'Never'}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                } else {
+                    container.innerHTML = '<div class="empty-state">No entitlements found</div>';
+                }
+            } catch (error) {
+                container.innerHTML = `<div class="alert alert-error">Error loading entitlements: ${error.message}</div>`;
+            }
+        }
+
+        // Load initial data
+        loadPlans();
+    </script>
+</body>
+</html>
+
