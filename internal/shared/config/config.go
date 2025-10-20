@@ -9,19 +9,36 @@ import (
 
 // Config holds all configuration for the payment service
 type Config struct {
-	AppName  string         `mapstructure:"app_name"`
-	GRPC     GRPCConfig     `mapstructure:"grpc"`
-	Postgres PostgresConfig `mapstructure:"postgres"`
-	Redis    RedisConfig    `mapstructure:"redis"`
-	Auth     AuthConfig     `mapstructure:"auth"`
-	Billing  BillingConfig  `mapstructure:"billing"`
-	Events   EventsConfig   `mapstructure:"events"`
-	Log      LogConfig      `mapstructure:"log"`
+	AppName          string                 `mapstructure:"app_name"`
+	GRPC             GRPCConfig             `mapstructure:"grpc"`
+	Postgres         PostgresConfig         `mapstructure:"postgres"`
+	Redis            RedisConfig            `mapstructure:"redis"`
+	Auth             AuthConfig             `mapstructure:"auth"`
+	Billing          BillingConfig          `mapstructure:"billing"`
+	Events           EventsConfig           `mapstructure:"events"`
+	Log              LogConfig              `mapstructure:"log"`
+	ServiceMesh      ServiceMeshConfig      `mapstructure:"service_mesh"`
+	MTLS             MTLSConfig             `mapstructure:"mtls"`
+	ExternalServices ExternalServicesConfig `mapstructure:"external_services"`
+	CircuitBreaker   CircuitBreakerConfig   `mapstructure:"circuit_breaker"`
 }
 
 // GRPCConfig holds gRPC server configuration
 type GRPCConfig struct {
-	Address string `mapstructure:"address"` // gRPC server address (e.g., ":8081")
+	Address          string `mapstructure:"address"`           // gRPC server address (e.g., ":8081")
+	EnableReflection bool   `mapstructure:"enable_reflection"` // Enable gRPC reflection (for debugging)
+}
+
+// APIGatewayConfig holds API Gateway configuration
+type APIGatewayConfig struct {
+	Address           string `mapstructure:"address"`
+	EnableTLS         bool   `mapstructure:"enable_tls"`
+	APIKey            string `mapstructure:"api_key"`
+	CertFile          string `mapstructure:"cert_file"`
+	KeyFile           string `mapstructure:"key_file"`
+	CAFile            string `mapstructure:"ca_file"`
+	DialTimeoutSec    int    `mapstructure:"dial_timeout_seconds"`
+	RequestTimeoutSec int    `mapstructure:"request_timeout_seconds"`
 }
 
 // PostgresConfig holds PostgreSQL configuration
@@ -60,6 +77,54 @@ type EventsConfig struct {
 // LogConfig holds logging configuration
 type LogConfig struct {
 	Level string `mapstructure:"level"`
+}
+
+// ServiceMeshConfig holds service mesh configuration (Envoy + Spiffe)
+type ServiceMeshConfig struct {
+	Enabled   bool            `mapstructure:"enabled"`
+	SpiffeID  string          `mapstructure:"spiffe_id"`
+	Discovery DiscoveryConfig `mapstructure:"discovery"`
+}
+
+// DiscoveryConfig holds service discovery configuration
+type DiscoveryConfig struct {
+	EnvoyAddress string `mapstructure:"envoy_address"`
+	Namespace    string `mapstructure:"namespace"`
+	Scheme       string `mapstructure:"scheme"`
+	TimeoutSec   int    `mapstructure:"timeout_seconds"`
+}
+
+// MTLSConfig holds mTLS configuration
+type MTLSConfig struct {
+	Enabled    bool   `mapstructure:"enabled"`
+	CertFile   string `mapstructure:"cert_file"`
+	KeyFile    string `mapstructure:"key_file"`
+	CAFile     string `mapstructure:"ca_file"`
+	MinVersion string `mapstructure:"min_version"`
+}
+
+// ExternalServicesConfig holds configuration for external services
+type ExternalServicesConfig struct {
+	ContactService  ServiceConfig `mapstructure:"contact_service"`
+	FamilyService   ServiceConfig `mapstructure:"family_service"`
+	DocumentService ServiceConfig `mapstructure:"document_service"`
+}
+
+// ServiceConfig holds configuration for a single external service
+type ServiceConfig struct {
+	Name       string `mapstructure:"name"`
+	Address    string `mapstructure:"address"`
+	SpiffeID   string `mapstructure:"spiffe_id"`
+	TimeoutSec int    `mapstructure:"timeout_seconds"`
+}
+
+// CircuitBreakerConfig holds circuit breaker configuration
+type CircuitBreakerConfig struct {
+	Enabled          bool `mapstructure:"enabled"`
+	FailureThreshold int  `mapstructure:"failure_threshold"`
+	SuccessThreshold int  `mapstructure:"success_threshold"`
+	TimeoutSec       int  `mapstructure:"timeout_seconds"`
+	HalfOpenMaxCalls int  `mapstructure:"half_open_max_calls"`
 }
 
 // Load loads configuration from file and environment variables
@@ -114,6 +179,7 @@ func LoadFromEnv() (*Config, error) {
 func setDefaults() {
 	viper.SetDefault("app_name", "payment-service")
 	viper.SetDefault("grpc.address", ":8081")
+	viper.SetDefault("grpc.enable_reflection", false)
 	viper.SetDefault("postgres.max_conns", 10)
 	viper.SetDefault("redis.addr", "localhost:6379")
 	viper.SetDefault("redis.db", 0)
@@ -123,6 +189,31 @@ func setDefaults() {
 	viper.SetDefault("events.provider", "kafka")
 	viper.SetDefault("events.topic", "payments")
 	viper.SetDefault("log.level", "info")
+
+	// API Gateway defaults
+	viper.SetDefault("api_gateway.address", "api-gateway:8080")
+	viper.SetDefault("api_gateway.enable_tls", true)
+	viper.SetDefault("api_gateway.dial_timeout_seconds", 30)
+	viper.SetDefault("api_gateway.request_timeout_seconds", 30)
+
+	// Service Mesh defaults
+	viper.SetDefault("service_mesh.enabled", false)
+	viper.SetDefault("service_mesh.spiffe_id", "spiffe://jia.app/payment-service")
+	viper.SetDefault("service_mesh.discovery.envoy_address", "localhost:8500")
+	viper.SetDefault("service_mesh.discovery.namespace", "default")
+	viper.SetDefault("service_mesh.discovery.scheme", "xds")
+	viper.SetDefault("service_mesh.discovery.timeout_seconds", 30)
+
+	// mTLS defaults
+	viper.SetDefault("mtls.enabled", false)
+	viper.SetDefault("mtls.min_version", "1.2")
+
+	// Circuit Breaker defaults
+	viper.SetDefault("circuit_breaker.enabled", true)
+	viper.SetDefault("circuit_breaker.failure_threshold", 5)
+	viper.SetDefault("circuit_breaker.success_threshold", 2)
+	viper.SetDefault("circuit_breaker.timeout_seconds", 60)
+	viper.SetDefault("circuit_breaker.half_open_max_calls", 3)
 }
 
 // Validate validates the configuration

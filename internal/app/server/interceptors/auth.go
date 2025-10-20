@@ -17,6 +17,12 @@ import (
 type AuthInterceptor struct {
 	// Whitelisted methods that don't require authentication
 	whitelistedMethods map[string]bool
+
+	// Spiffe IDs allowed for service-to-service calls
+	allowedSpiffeIDs map[string]bool
+
+	// Enable spiffe validation for service-to-service calls
+	enableSpiffeValidation bool
 }
 
 // NewAuthInterceptor creates a new authentication interceptor
@@ -27,7 +33,26 @@ func NewAuthInterceptor() *AuthInterceptor {
 			"/payment.v1.PaymentService/ProcessWebhook":        true,
 			"/payment.v1.PaymentService/ListPricingZones":      true,
 		},
+		allowedSpiffeIDs: map[string]bool{
+			"spiffe://jia.app/contact-service":  true,
+			"spiffe://jia.app/family-service":   true,
+			"spiffe://jia.app/document-service": true,
+		},
+		enableSpiffeValidation: false, // Set to true when spiffe is configured
 	}
+}
+
+// NewAuthInterceptorWithSpiffe creates a new authentication interceptor with spiffe validation
+func NewAuthInterceptorWithSpiffe(allowedSpiffeIDs []string) *AuthInterceptor {
+	interceptor := NewAuthInterceptor()
+	interceptor.enableSpiffeValidation = true
+
+	// Add allowed spiffe IDs
+	for _, spiffeID := range allowedSpiffeIDs {
+		interceptor.allowedSpiffeIDs[spiffeID] = true
+	}
+
+	return interceptor
 }
 
 // Unary returns a unary interceptor for authentication
@@ -105,6 +130,20 @@ func (i *AuthInterceptor) authenticate(ctx context.Context) (string, error) {
 		return "", status.Errorf(codes.Unauthenticated, "metadata is not provided")
 	}
 
+	// Check for spiffe ID first (service-to-service authentication)
+	if i.enableSpiffeValidation {
+		spiffeIDs := md.Get("spiffe-id")
+		if len(spiffeIDs) > 0 {
+			spiffeID := spiffeIDs[0]
+			if i.allowedSpiffeIDs[spiffeID] {
+				log.Info(ctx, "Service-to-service request authenticated with spiffe",
+					zap.String("spiffe_id", spiffeID))
+				return spiffeID, nil
+			}
+			return "", status.Errorf(codes.PermissionDenied, "spiffe ID not allowed: %s", spiffeID)
+		}
+	}
+
 	// Look for authorization metadata with key "better-auth-token"
 	authTokens := md.Get("better-auth-token")
 	if len(authTokens) == 0 {
@@ -149,4 +188,24 @@ func (i *AuthInterceptor) AddWhitelistedMethod(method string) {
 // RemoveWhitelistedMethod removes a method from the whitelist
 func (i *AuthInterceptor) RemoveWhitelistedMethod(method string) {
 	delete(i.whitelistedMethods, method)
+}
+
+// AddAllowedSpiffeID adds a spiffe ID to the allowed list
+func (i *AuthInterceptor) AddAllowedSpiffeID(spiffeID string) {
+	i.allowedSpiffeIDs[spiffeID] = true
+}
+
+// RemoveAllowedSpiffeID removes a spiffe ID from the allowed list
+func (i *AuthInterceptor) RemoveAllowedSpiffeID(spiffeID string) {
+	delete(i.allowedSpiffeIDs, spiffeID)
+}
+
+// EnableSpiffeValidation enables spiffe ID validation
+func (i *AuthInterceptor) EnableSpiffeValidation() {
+	i.enableSpiffeValidation = true
+}
+
+// DisableSpiffeValidation disables spiffe ID validation
+func (i *AuthInterceptor) DisableSpiffeValidation() {
+	i.enableSpiffeValidation = false
 }

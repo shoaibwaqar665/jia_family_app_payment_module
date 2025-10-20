@@ -57,3 +57,7 @@ docker/postgres_data/
 docker/redis_data/
 
 *.env
+
+*.md
+*.txt
+*.sql

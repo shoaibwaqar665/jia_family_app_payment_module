@@ -180,18 +180,27 @@ func (s *GRPCServer) checkDependencies() {
 	// Check database health
 	dbHealthy := s.checkDatabase(ctx)
 
-	// Check Redis health
+	// Check Redis health (optional)
 	redisHealthy := s.checkRedis(ctx)
+	redisOptional := s.redisClient == nil
 
 	// Set overall health status
-	if dbHealthy && redisHealthy {
+	// If Redis is nil (optional), only check database
+	// If Redis is configured, both must be healthy
+	allHealthy := dbHealthy && (redisOptional || redisHealthy)
+
+	if allHealthy {
 		s.healthServer.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
-		s.logger.Debug("All dependencies healthy, setting status to SERVING")
+		s.logger.Debug("All dependencies healthy, setting status to SERVING",
+			zap.Bool("db_healthy", dbHealthy),
+			zap.Bool("redis_healthy", redisHealthy),
+			zap.Bool("redis_optional", redisOptional))
 	} else {
 		s.healthServer.SetServingStatus("", healthpb.HealthCheckResponse_NOT_SERVING)
 		s.logger.Warn("Dependencies unhealthy, setting status to NOT_SERVING",
 			zap.Bool("db_healthy", dbHealthy),
-			zap.Bool("redis_healthy", redisHealthy))
+			zap.Bool("redis_healthy", redisHealthy),
+			zap.Bool("redis_optional", redisOptional))
 	}
 }
 

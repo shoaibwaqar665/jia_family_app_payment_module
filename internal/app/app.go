@@ -1,184 +1,205 @@
+// Package app provides the main application structure with service mesh integration
+// This is an example integration file showing how to use the service mesh components
 package app
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 
 	"github.com/jia-app/paymentservice/internal/app/server"
-	"github.com/jia-app/paymentservice/internal/payment"
-	"github.com/jia-app/paymentservice/internal/payment/repo/postgres"
-	"github.com/jia-app/paymentservice/internal/payment/transport"
-	"github.com/jia-app/paymentservice/internal/payment/usecase"
-	"github.com/jia-app/paymentservice/internal/shared/cache"
 	"github.com/jia-app/paymentservice/internal/shared/config"
-	"github.com/jia-app/paymentservice/internal/shared/events"
 	"github.com/jia-app/paymentservice/internal/shared/log"
 	"github.com/jia-app/paymentservice/internal/shared/metrics"
+	"github.com/jia-app/paymentservice/internal/shared/services"
 )
 
-// BootstrapAndServe initializes all dependencies and starts the gRPC server
-func BootstrapAndServe(ctx context.Context) error {
-	// Load configuration
-	cfg, err := config.Load("config.yaml")
-	if err != nil {
-		return err
-	}
+// App represents the application
+type App struct {
+	config           *config.Config
+	logger           *zap.Logger
+	dbPool           *pgxpool.Pool
+	redisClient      *redis.Client
+	grpcServer       *server.GRPCServer
+	metricsCollector *metrics.MetricsCollector
+	serviceManager   *services.ServiceManager
+}
 
-	// Initialize logger with configuration
+// New creates a new application instance
+func New(cfg *config.Config) (*App, error) {
+	// Initialize logger
 	if err := log.Init(cfg.Log.Level); err != nil {
-		return err
+		return nil, fmt.Errorf("failed to initialize logger: %w", err)
 	}
+	logger := log.L(context.Background())
 
-	// Use structured logging from here on
-	log.Info(ctx, "Payment Service starting",
+	logger.Info("Initializing payment service application",
 		zap.String("app_name", cfg.AppName),
-		zap.String("grpc_address", cfg.GRPC.Address),
-		zap.Int32("postgres_max_conns", cfg.Postgres.MaxConns),
-		zap.String("redis_addr", cfg.Redis.Addr),
-		zap.String("billing_provider", cfg.Billing.Provider),
-		zap.String("events_provider", cfg.Events.Provider))
+		zap.String("grpc_address", cfg.GRPC.Address))
 
-	// Initialize database connection
-	log.Info(ctx, "Connecting to database...")
-	dbConfig, err := pgxpool.ParseConfig(cfg.Postgres.DSN)
+	// Initialize database pool
+	dbPool, err := initializeDatabase(cfg)
 	if err != nil {
-		log.Error(ctx, "Failed to parse database config", zap.Error(err))
-		return err
+		return nil, fmt.Errorf("failed to initialize database: %w", err)
 	}
 
-	// Set maximum connections
-	dbConfig.MaxConns = cfg.Postgres.MaxConns
-
-	dbPool, err := pgxpool.NewWithConfig(ctx, dbConfig)
+	// Initialize Redis client (optional)
+	redisClient, err := initializeRedis(cfg)
 	if err != nil {
-		log.Error(ctx, "Failed to create database pool", zap.Error(err))
-		return err
+		logger.Warn("Redis initialization failed, continuing without Redis",
+			zap.Error(err),
+			zap.String("redis_addr", cfg.Redis.Addr))
+		redisClient = nil
 	}
-	defer dbPool.Close()
 
-	// Fast fail on missing DB connection
-	if err := dbPool.Ping(ctx); err != nil {
-		log.Error(ctx, "Failed to ping database - fast fail", zap.Error(err))
-		return err
+	// Initialize metrics collector
+	metricsCollector := metrics.NewMetricsCollector()
+
+	// Initialize service discovery and service manager if enabled
+	var serviceManager *services.ServiceManager
+	if cfg.ServiceMesh.Enabled {
+		logger.Info("Service mesh enabled, initializing service discovery",
+			zap.String("spiffe_id", cfg.ServiceMesh.SpiffeID))
+
+		serviceManager, err = services.NewServiceManager(cfg, logger)
+		if err != nil {
+			logger.Warn("Failed to initialize service manager, continuing without external services",
+				zap.Error(err))
+		} else {
+			// Initialize service clients
+			if err := serviceManager.Initialize(context.Background()); err != nil {
+				logger.Warn("Failed to initialize service clients, continuing without external services",
+					zap.Error(err))
+			} else {
+				logger.Info("Service manager initialized successfully")
+			}
+		}
 	}
-	log.Info(ctx, "Database connection established", zap.Int32("max_conns", cfg.Postgres.MaxConns))
 
-	// Initialize Redis connection
-	log.Info(ctx, "Connecting to Redis...")
-	redisClient := redis.NewClient(&redis.Options{
+	// NOTE: This is an example integration file
+	// In production, you would initialize your repositories, use cases, and services here
+	// For now, we'll just initialize the gRPC server and service manager
+
+	// Initialize gRPC server
+	grpcServer := server.NewGRPCServer(cfg, dbPool, redisClient, metricsCollector)
+
+	// Log service mesh configuration
+	if cfg.ServiceMesh.Enabled {
+		allowedSpiffeIDs := []string{
+			cfg.ExternalServices.ContactService.SpiffeID,
+			cfg.ExternalServices.FamilyService.SpiffeID,
+			cfg.ExternalServices.DocumentService.SpiffeID,
+		}
+		logger.Info("Service mesh enabled with spiffe authentication",
+			zap.Strings("allowed_spiffe_ids", allowedSpiffeIDs))
+	} else {
+		logger.Info("Service mesh disabled, using standard JWT authentication")
+	}
+
+	// TODO: Initialize and register payment service
+	// paymentService := transport.NewPaymentService(...)
+	// grpcServer.RegisterPaymentService(paymentService)
+
+	return &App{
+		config:           cfg,
+		logger:           logger,
+		dbPool:           dbPool,
+		redisClient:      redisClient,
+		grpcServer:       grpcServer,
+		metricsCollector: metricsCollector,
+		serviceManager:   serviceManager,
+	}, nil
+}
+
+// Run starts the application
+func (a *App) Run(ctx context.Context) error {
+	a.logger.Info("Starting payment service application")
+
+	// Start health monitoring
+	a.grpcServer.StartHealthMonitoring(ctx)
+
+	// Start gRPC server
+	if err := a.grpcServer.Serve(ctx); err != nil {
+		return fmt.Errorf("gRPC server error: %w", err)
+	}
+
+	return nil
+}
+
+// Shutdown gracefully shuts down the application
+func (a *App) Shutdown(ctx context.Context) error {
+	a.logger.Info("Shutting down payment service application")
+
+	// Close service manager
+	if a.serviceManager != nil {
+		if err := a.serviceManager.Close(); err != nil {
+			a.logger.Error("Failed to close service manager", zap.Error(err))
+		}
+	}
+
+	// Close Redis client
+	if a.redisClient != nil {
+		if err := a.redisClient.Close(); err != nil {
+			a.logger.Error("Failed to close redis client", zap.Error(err))
+		}
+	}
+
+	// Close database pool
+	if a.dbPool != nil {
+		a.dbPool.Close()
+	}
+
+	a.logger.Info("Application shutdown complete")
+	return nil
+}
+
+// initializeDatabase initializes the database connection pool
+func initializeDatabase(cfg *config.Config) (*pgxpool.Pool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	pool, err := pgxpool.New(ctx, cfg.Postgres.DSN)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create database pool: %w", err)
+	}
+
+	// Test connection
+	if err := pool.Ping(ctx); err != nil {
+		return nil, fmt.Errorf("failed to ping database: %w", err)
+	}
+
+	return pool, nil
+}
+
+// initializeRedis initializes the Redis client
+func initializeRedis(cfg *config.Config) (*redis.Client, error) {
+	client := redis.NewClient(&redis.Options{
 		Addr:     cfg.Redis.Addr,
 		DB:       cfg.Redis.DB,
 		Password: cfg.Redis.Password,
 	})
-	defer redisClient.Close()
 
-	// Test Redis connection (optional)
-	var cacheClient *cache.Cache
-	if err := redisClient.Ping(ctx).Err(); err != nil {
-		log.Warn(ctx, "Redis not available, running without cache", zap.Error(err))
-		redisClient = nil
-		cacheClient = nil
-	} else {
-		log.Info(ctx, "Redis connection established")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
-		// Initialize cache with Redis client
-		log.Info(ctx, "Initializing cache...")
-		cacheClient, err = cache.NewCache(cfg.Redis.Addr, cfg.Redis.Password, cfg.Redis.DB)
-		if err != nil {
-			log.Warn(ctx, "Failed to create cache client, running without cache", zap.Error(err))
-			cacheClient = nil
-		} else {
-			log.Info(ctx, "Cache initialized successfully")
-		}
+	// Test connection
+	if err := client.Ping(ctx).Err(); err != nil {
+		return nil, fmt.Errorf("failed to ping redis: %w", err)
 	}
 
-	// Initialize repositories with database pool
-	log.Info(ctx, "Initializing repositories...")
-	repo, err := postgres.NewStoreWithPool(dbPool)
-	if err != nil {
-		log.Error(ctx, "Failed to create repository", zap.Error(err))
-		return err
-	}
-	log.Info(ctx, "Repositories initialized successfully")
+	return client, nil
+}
 
-	// Initialize billing provider
-	log.Info(ctx, "Initializing billing provider...")
-	billingProvider, err := NewBillingProvider(ctx, cfg)
-	if err != nil {
-		log.Error(ctx, "Failed to initialize billing provider", zap.Error(err))
-		return err
-	}
-	defer billingProvider.Close()
+// GetServiceManager returns the service manager
+func (a *App) GetServiceManager() *services.ServiceManager {
+	return a.serviceManager
+}
 
-	// Initialize event publisher based on configuration
-	log.Info(ctx, "Initializing event publisher...")
-	var entitlementPublisher events.EntitlementPublisher
-	if cfg.Events.Provider == "kafka" {
-		logger := log.L(ctx)
-		entitlementPublisher = events.NewKafkaPublisher(cfg.Events.Topic, logger)
-		log.Info(ctx, "Using Kafka event publisher", zap.String("topic", cfg.Events.Topic))
-	} else {
-		entitlementPublisher = events.NoopPublisher{}
-		log.Info(ctx, "Using Noop event publisher")
-	}
-
-	// Initialize payment service
-	log.Info(ctx, "Initializing payment service...")
-
-	// Pricing: in-memory rule store and calculator (pluggable later)
-	ruleStore := payment.NewMemoryRuleStore()
-	_ = payment.NewCalculator(ruleStore) // TODO: Use for price adjustments
-
-	// Initialize use cases
-	paymentUseCase := usecase.NewPaymentUseCase(repo.Payment())
-	entitlementUseCase := usecase.NewEntitlementUseCase(repo.Entitlement(), cacheClient, entitlementPublisher)
-	bulkEntitlementUseCase := usecase.NewBulkEntitlementUseCase(repo.Entitlement(), cacheClient)
-	checkoutUseCase := usecase.NewCheckoutUseCase(repo.Plan(), repo.Entitlement(), repo.PricingZone(), repo.Payment(), cacheClient, entitlementPublisher)
-	pricingZoneUseCase := usecase.NewPricingZoneUseCase(repo.PricingZone())
-
-	// Initialize metrics collector
-	log.Info(ctx, "Initializing metrics collector...")
-	metricsCollector := metrics.NewMetricsCollector()
-	log.Info(ctx, "Metrics collector initialized successfully")
-
-	paymentService := transport.NewPaymentService(
-		cfg,
-		paymentUseCase,
-		entitlementUseCase,
-		bulkEntitlementUseCase,
-		checkoutUseCase,
-		pricingZoneUseCase,
-		cacheClient,
-		entitlementPublisher,
-		billingProvider,
-		metricsCollector,
-	)
-	log.Info(ctx, "Payment service initialized successfully")
-
-	// Initialize gRPC server with dependencies
-	log.Info(ctx, "Initializing gRPC server...")
-	grpcServer := server.NewGRPCServer(cfg, dbPool, redisClient, metricsCollector)
-
-	// Register payment service with gRPC server
-	grpcServer.RegisterPaymentService(paymentService)
-	log.Info(ctx, "Payment service registered with gRPC server")
-
-	log.Info(ctx, "Payment Service initialized successfully")
-
-	// Start health monitoring
-	log.Info(ctx, "Starting health monitoring...")
-	grpcServer.StartHealthMonitoring(ctx)
-
-	// Start gRPC server (blocks until shutdown)
-	log.Info(ctx, "Starting gRPC server...")
-	if err := grpcServer.Serve(ctx); err != nil {
-		log.Error(ctx, "gRPC server error", zap.Error(err))
-		return err
-	}
-
-	log.Info(ctx, "Payment Service shutdown complete")
-	return nil
+// GetMetricsCollector returns the metrics collector
+func (a *App) GetMetricsCollector() *metrics.MetricsCollector {
+	return a.metricsCollector
 }
