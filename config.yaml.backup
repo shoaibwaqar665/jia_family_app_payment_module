@@ -1,0 +1,29 @@
+app_name: "payment-service"
+
+grpc:
+  address: ":8081"
+
+postgres:
+  dsn: ""
+  max_conns: 10
+
+redis:
+  addr: "localhost:6379"
+  db: 0
+  password: ""
+
+auth:
+  public_key_pem: ""
+
+billing:
+  provider: "stripe"
+  stripe_secret: ""
+  stripe_publishable: ""
+
+events:
+  provider: "kafka"
+  brokers: ["localhost:9092"]
+  topic: "payments"
+
+log:
+  level: "info"
