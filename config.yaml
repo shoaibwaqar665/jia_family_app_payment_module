@@ -1,0 +1,55 @@
+# Simplified Payment Service Configuration
+# This is a minimal configuration for the payment service
+
+app_name: payment-service
+
+# gRPC Server Configuration
+grpc:
+  address: ":50051"  # Internal port (not exposed directly)
+  tls_enabled: true  # Enable TLS by default in production
+  mtls_enabled: true  # Enable mTLS for SPIFFE authentication
+  cert_file: "${TLS_CERT_FILE}"  # Path to TLS certificate file
+  key_file: "${TLS_KEY_FILE}"    # Path to TLS key file
+  client_ca_file: "${TLS_CLIENT_CA_FILE}"  # Path to client CA file for mTLS
+  enable_reflection: false  # Disabled in production
+
+# Database Configuration
+postgres:
+  dsn: "${DB_DSN}"  # Will be set from environment variables
+  max_conns: 10
+
+# Redis Cache Configuration (optional)
+redis:
+  addr: "${REDIS_HOST}:${REDIS_PORT}"
+  db: ${REDIS_DB}
+  password: "${REDIS_PASSWORD}"
+
+# Authentication Configuration
+# JWT public key for validating user tokens
+auth:
+  public_key_pem: "${JWT_PUBLIC_KEY_PEM}"  # JWT public key as PEM string (preferred)
+  public_key_path: "${JWT_PUBLIC_KEY_PATH}"  # Path to JWT public key PEM file (fallback)
+  spiffe_enabled: true  # Enable SPIFFE peer validation
+  spiffe_trust_domain: "${SPIFFE_TRUST_DOMAIN}"  # SPIFFE trust domain (e.g., "example.com")
+  spiffe_ca_cert_pem: "${SPIFFE_CA_CERT_PEM}"  # SPIFFE CA certificate as PEM string
+  whitelisted_methods: "${AUTH_WHITELISTED_METHODS}"  # Comma-separated list of whitelisted gRPC methods
+
+# Billing Provider Configuration
+billing:
+  provider: stripe  # Options: stripe, paypal, adyen
+  stripe_secret: "${STRIPE_SECRET_KEY}"
+  stripe_publishable: "${STRIPE_PUBLISHABLE_KEY}"
+  stripe_webhook_secret: "${STRIPE_WEBHOOK_SECRET}"
+
+# Logging Configuration
+log:
+  level: info  # Options: debug, info, warn, error
+
+# Secret Management Configuration
+secrets:
+  provider: env  # Options: env, file, vault
+  prefix: PAYMENT_SERVICE  # Prefix for environment variables
+  cache_ttl: 5m  # Cache TTL for secrets
+  base_path: /etc/secrets  # Base path for file provider
+  vault_addr: "${VAULT_ADDR}"  # Vault server address
+  vault_token: "${VAULT_TOKEN}"  # Vault token
