@@ -1,95 +1,203 @@
-# Payment Service Makefile
-# 
-# Environment Variables:
-#   POSTGRES_DSN - PostgreSQL connection string (default: postgres://app:app@localhost:5432/payments?sslmode=disable)
-#   REDIS_ADDR   - Redis address (default: localhost:6379)
-#   GRPC_ADDR    - gRPC server address (default: :8081)
-#   ENV          - Environment (dev, test, prod)
-#
-# Examples:
-#   export POSTGRES_DSN="postgres://user:pass@localhost:5432/db?sslmode=disable"
-#   export REDIS_ADDR="localhost:6379"
-#   export GRPC_ADDR=":8081"
-#   export ENV="dev"
-#
-#   make run                    # Run with default config
-#   make run POSTGRES_DSN="..." # Run with custom DB
-#   make migrate-up             # Run migrations with POSTGRES_DSN
-#   make generate               # Generate proto and sqlc code
+# Makefile for Jia Payment Service
 
-.PHONY: help generate sqlc-validate migrate-up migrate-down migrate-create migrate-force run lint
+.PHONY: help build test test-unit test-integration test-e2e lint clean docker-build docker-run migrate-up migrate-down proto-generate
 
 # Default target
-help:
-	@echo "Available targets:"
-	@echo "  generate     - Generate code from proto and sqlc"
-	@echo "  sqlc-validate - Validate sqlc configuration and queries"
-	@echo "  migrate-up   - Run database migrations up"
-	@echo "  migrate-down - Rollback database migrations (1 step)"
-	@echo "  migrate-create - Create a new migration file"
-	@echo "  migrate-force - Force migration to specific version"
-	@echo "  run          - Run the payment service"
-	@echo "  lint         - Run linter and formatter (optional)"
+help: ## Show this help message
+	@echo 'Usage: make [target]'
+	@echo ''
+	@echo 'Targets:'
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-20s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-# Generate code from proto and sqlc
-generate:
-	@echo "Generating code..."
-	@echo "Generating Go code from proto files..."
-	@protoc --go_out=. --go_opt=paths=source_relative \
-		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
-		proto/payment/v1/payment_service.proto
-	@echo "Generating SQL code with sqlc..."
-	@docker-compose run --rm sqlc generate -f sqlc.yaml
-	@echo "Code generation complete"
+# Build targets
+build: ## Build the application
+	@echo "Building payment service..."
+	CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o bin/payment-service ./cmd/paymentservice
 
-# Validate sqlc configuration and queries
-sqlc-validate:
-	@echo "Validating sqlc configuration..."
-	@docker-compose run --rm sqlc validate -f sqlc.yaml
-	@echo "Validation complete"
+build-local: ## Build the application for local development
+	@echo "Building payment service for local development..."
+	go build -o bin/payment-service ./cmd/paymentservice
 
-# Run database migrations up
-migrate-up:
-	@echo "Running migrations up..."
-	@POSTGRES_DSN="$${POSTGRES_DSN:-postgres://app:app@localhost:5432/payments?sslmode=disable}" \
-	docker-compose run --rm migrate -path=/migrations -database "$$POSTGRES_DSN" up
-	@echo "Migrations completed"
+# Test targets
+test: test-unit test-integration ## Run all tests
 
-# Rollback database migrations (rollback 1 step)
-migrate-down:
-	@echo "Rolling back migrations..."
-	@POSTGRES_DSN="$${POSTGRES_DSN:-postgres://app:app@localhost:5432/payments?sslmode=disable}" \
-	docker-compose run --rm migrate -path=/migrations -database "$$POSTGRES_DSN" down 1
-	@echo "Migrations rolled back"
+test-unit: ## Run unit tests
+	@echo "Running unit tests..."
+	go test -v -race -coverprofile=coverage.out ./...
 
-# Create a new migration file
-migrate-create:
-	@read -p "Enter migration name: " name; \
-	docker-compose run --rm migrate create -ext sql -dir /migrations -seq $$name
+test-integration: ## Run integration tests
+	@echo "Running integration tests..."
+	go test -v -tags=integration ./...
 
-# Force migration version (use with caution)
-migrate-force:
-	@read -p "Enter version to force: " version; \
-	@POSTGRES_DSN="$${POSTGRES_DSN:-postgres://app:app@localhost:5432/payments?sslmode=disable}" \
-	docker-compose run --rm migrate -path=/migrations -database "$$POSTGRES_DSN" force $$version
+test-e2e: ## Run end-to-end tests
+	@echo "Running end-to-end tests..."
+	go test -v -tags=e2e ./...
 
-# Run the payment service
-run:
-	@echo "Starting payment service..."
-	@go run ./cmd/paymentservice
+test-coverage: test-unit ## Generate test coverage report
+	@echo "Generating coverage report..."
+	go tool cover -html=coverage.out -o coverage.html
+	@echo "Coverage report generated: coverage.html"
 
-# Run linter and formatter (optional)
-lint:
+# Linting and formatting
+lint: ## Run linter
 	@echo "Running linter..."
-	@if command -v golangci-lint >/dev/null 2>&1; then \
-		golangci-lint run; \
-	else \
-		echo "golangci-lint not found, skipping..."; \
-	fi
-	@echo "Running formatter..."
-	@if command -v gofmt >/dev/null 2>&1; then \
-		gofmt -s -w .; \
-	else \
-		echo "gofmt not found, skipping..."; \
-	fi
-	@echo "Linting complete"
+	golangci-lint run
+
+lint-fix: ## Run linter with auto-fix
+	@echo "Running linter with auto-fix..."
+	golangci-lint run --fix
+
+format: ## Format code
+	@echo "Formatting code..."
+	go fmt ./...
+	goimports -w .
+
+# Database targets
+migrate-up: ## Run database migrations up
+	@echo "Running database migrations up..."
+	@if [ -z "$(DSN)" ]; then echo "Please set DSN environment variable"; exit 1; fi
+	migrate -path migrations -database "$(DSN)" up
+
+migrate-down: ## Run database migrations down
+	@echo "Running database migrations down..."
+	@if [ -z "$(DSN)" ]; then echo "Please set DSN environment variable"; exit 1; fi
+	migrate -path migrations -database "$(DSN)" down
+
+migrate-force: ## Force migration version
+	@echo "Forcing migration version..."
+	@if [ -z "$(DSN)" ] || [ -z "$(VERSION)" ]; then echo "Please set DSN and VERSION environment variables"; exit 1; fi
+	migrate -path migrations -database "$(DSN)" force $(VERSION)
+
+# Protocol buffer targets
+proto-generate: ## Generate Go code from protobuf files
+	@echo "Generating protobuf code..."
+	protoc --go_out=. --go_opt=paths=source_relative \
+		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
+		--validate_out="lang=go:." \
+		proto/payment/v1/payment_service.proto
+
+proto-descriptor: ## Generate protobuf descriptor file
+	@echo "Generating protobuf descriptor..."
+	protoc --descriptor_set_out=proto/payment/v1/payment_service.pb \
+		--include_imports \
+		proto/payment/v1/payment_service.proto
+
+# Docker targets
+docker-build: ## Build Docker image
+	@echo "Building Docker image..."
+	docker build -t payment-service:latest .
+
+docker-run: ## Run Docker container
+	@echo "Running Docker container..."
+	docker run -p 8081:8081 --env-file .env payment-service:latest
+
+docker-compose-up: ## Start services with docker-compose
+	@echo "Starting services with docker-compose..."
+	docker-compose -f docker/docker-compose.yaml up -d
+
+docker-compose-down: ## Stop services with docker-compose
+	@echo "Stopping services with docker-compose..."
+	docker-compose -f docker/docker-compose.yaml down
+
+docker-compose-logs: ## Show docker-compose logs
+	@echo "Showing docker-compose logs..."
+	docker-compose -f docker/docker-compose.yaml logs -f
+
+# Development targets
+dev: ## Start development environment
+	@echo "Starting development environment..."
+	docker-compose -f docker/docker-compose.yaml up -d postgres redis
+	@echo "Waiting for services to be ready..."
+	sleep 10
+	@echo "Running migrations..."
+	DSN="postgres://postgres:postgres@localhost:5432/payment_service?sslmode=disable" make migrate-up
+	@echo "Starting application..."
+	go run ./cmd/paymentservice
+
+dev-clean: ## Clean development environment
+	@echo "Cleaning development environment..."
+	docker-compose -f docker/docker-compose.yaml down -v
+	docker system prune -f
+
+# Security targets
+security-scan: ## Run security scan
+	@echo "Running security scan..."
+	gosec ./...
+
+security-audit: ## Run security audit
+	@echo "Running security audit..."
+	go list -json -deps ./... | nancy sleuth
+
+# Performance targets
+benchmark: ## Run benchmarks
+	@echo "Running benchmarks..."
+	go test -bench=. -benchmem ./...
+
+profile-cpu: ## Generate CPU profile
+	@echo "Generating CPU profile..."
+	go test -cpuprofile=cpu.prof -bench=. ./...
+
+profile-mem: ## Generate memory profile
+	@echo "Generating memory profile..."
+	go test -memprofile=mem.prof -bench=. ./...
+
+# Cleanup targets
+clean: ## Clean build artifacts
+	@echo "Cleaning build artifacts..."
+	rm -rf bin/
+	rm -f coverage.out coverage.html
+	rm -f *.prof
+	go clean -cache
+
+# Dependencies
+deps: ## Install dependencies
+	@echo "Installing dependencies..."
+	go mod download
+	go mod verify
+
+deps-update: ## Update dependencies
+	@echo "Updating dependencies..."
+	go get -u ./...
+	go mod tidy
+
+deps-vendor: ## Vendor dependencies
+	@echo "Vendoring dependencies..."
+	go mod vendor
+
+# Tools installation
+install-tools: ## Install development tools
+	@echo "Installing development tools..."
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	go install github.com/securecodewarrior/gosec/v2/cmd/gosec@latest
+	go install github.com/nancy-org/nancy@latest
+	go install github.com/golang-migrate/migrate/v4/cmd/migrate@latest
+	go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+	go install github.com/envoyproxy/protoc-gen-validate@latest
+	go install golang.org/x/tools/cmd/goimports@latest
+
+# Environment setup
+setup: install-tools deps ## Setup development environment
+	@echo "Setting up development environment..."
+	@if [ ! -f .env ]; then cp example.env .env; fi
+	@echo "Development environment setup complete!"
+	@echo "Please update .env file with your configuration"
+
+# Health check
+health: ## Check service health
+	@echo "Checking service health..."
+	@curl -f http://localhost:8081/health || echo "Service is not running"
+
+# Documentation
+docs: ## Generate documentation
+	@echo "Generating documentation..."
+	godoc -http=:6060 &
+	@echo "Documentation available at http://localhost:6060"
+
+# Release
+release: build test lint ## Create a release build
+	@echo "Creating release build..."
+	@if [ -z "$(VERSION)" ]; then echo "Please set VERSION environment variable"; exit 1; fi
+	docker build -t payment-service:$(VERSION) .
+	docker tag payment-service:$(VERSION) payment-service:latest
+	@echo "Release $(VERSION) created successfully!"

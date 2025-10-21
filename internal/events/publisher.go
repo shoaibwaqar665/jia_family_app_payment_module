@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/IBM/sarama"
 	"github.com/jia-app/paymentservice/internal/domain"
 	"go.uber.org/zap"
 )
@@ -34,25 +35,40 @@ type Publisher interface {
 
 // EventPublisher represents a concrete event publisher
 type EventPublisher struct {
-	// TODO: Add actual implementation (e.g., Kafka, Redis Streams, etc.)
+	kafkaPublisher *KafkaPublisher
+	logger         *zap.Logger
 }
 
 // NewEventPublisher creates a new event publisher
-func NewEventPublisher() *EventPublisher {
-	return &EventPublisher{}
+func NewEventPublisher(kafkaPublisher *KafkaPublisher, logger *zap.Logger) *EventPublisher {
+	return &EventPublisher{
+		kafkaPublisher: kafkaPublisher,
+		logger:         logger,
+	}
 }
 
 // Publish publishes an event
 func (p *EventPublisher) Publish(ctx context.Context, event *Event) error {
-	// TODO: Implement actual publishing logic
+	if p.kafkaPublisher != nil {
+		return p.kafkaPublisher.Publish(ctx, event)
+	}
+
+	// Fallback to console logging if no Kafka publisher
 	eventJSON, _ := json.Marshal(event)
-	fmt.Printf("Publishing event: %s\n", string(eventJSON))
+	p.logger.Info("Publishing event",
+		zap.String("event_id", event.ID),
+		zap.String("event_type", event.Type),
+		zap.String("event_data", string(eventJSON)))
 	return nil
 }
 
 // PublishBatch publishes multiple events
 func (p *EventPublisher) PublishBatch(ctx context.Context, events []*Event) error {
-	// TODO: Implement actual batch publishing logic
+	if p.kafkaPublisher != nil {
+		return p.kafkaPublisher.PublishBatch(ctx, events)
+	}
+
+	// Fallback to individual publishing
 	for _, event := range events {
 		if err := p.Publish(ctx, event); err != nil {
 			return fmt.Errorf("failed to publish event %s: %w", event.ID, err)
@@ -63,7 +79,9 @@ func (p *EventPublisher) PublishBatch(ctx context.Context, events []*Event) erro
 
 // Close closes the publisher
 func (p *EventPublisher) Close() error {
-	// TODO: Implement cleanup logic
+	if p.kafkaPublisher != nil {
+		return p.kafkaPublisher.Close()
+	}
 	return nil
 }
 
@@ -81,13 +99,11 @@ func NewEvent(eventType, aggregate string, data map[string]interface{}) *Event {
 
 // generateEventID generates a unique event ID
 func generateEventID() string {
-	// TODO: Implement proper ID generation
-	return fmt.Sprintf("evt_%d", getCurrentTimestamp())
+	return fmt.Sprintf("evt_%d_%d", time.Now().Unix(), time.Now().UnixNano()%1000000)
 }
 
 // getCurrentTimestamp returns the current timestamp
 func getCurrentTimestamp() int64 {
-	// TODO: Use proper time package
 	return time.Now().Unix()
 }
 
@@ -104,31 +120,149 @@ func (NoopPublisher) PublishEntitlementUpdated(ctx context.Context, e domain.Ent
 	return nil
 }
 
-// KafkaPublisher is a stub implementation for Kafka-based event publishing
+// KafkaPublisher is a Kafka-based event publisher
 type KafkaPublisher struct {
-	topic  string
-	logger *zap.Logger
+	topic    string
+	logger   *zap.Logger
+	producer sarama.SyncProducer
+	brokers  []string
 }
 
 // NewKafkaPublisher creates a new Kafka publisher
-func NewKafkaPublisher(topic string, logger *zap.Logger) *KafkaPublisher {
-	return &KafkaPublisher{
-		topic:  topic,
-		logger: logger,
+func NewKafkaPublisher(topic string, brokers []string, logger *zap.Logger) (*KafkaPublisher, error) {
+	config := sarama.NewConfig()
+	config.Producer.RequiredAcks = sarama.WaitForAll
+	config.Producer.Retry.Max = 3
+	config.Producer.Return.Successes = true
+	config.Producer.Timeout = 10 * time.Second
+
+	producer, err := sarama.NewSyncProducer(brokers, config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Kafka producer: %w", err)
 	}
+
+	return &KafkaPublisher{
+		topic:    topic,
+		logger:   logger,
+		producer: producer,
+		brokers:  brokers,
+	}, nil
 }
 
 // PublishEntitlementUpdated implements EntitlementPublisher for KafkaPublisher
 func (p *KafkaPublisher) PublishEntitlementUpdated(ctx context.Context, e domain.Entitlement, action string) error {
-	// TODO: Implement actual Kafka publishing logic
-	p.logger.Info("Publishing entitlement updated event to Kafka",
+	event := &Event{
+		ID:        fmt.Sprintf("entitlement_%s_%d", e.ID.String(), time.Now().UnixNano()),
+		Type:      "entitlement.updated",
+		Aggregate: "entitlement",
+		Data: map[string]interface{}{
+			"entitlement_id": e.ID.String(),
+			"user_id":        e.UserID,
+			"plan_id":        e.PlanID.String(),
+			"feature_code":   e.FeatureCode,
+			"status":         e.Status,
+			"expires_at":     e.ExpiresAt.Format(time.RFC3339),
+			"action":         action,
+		},
+		Timestamp: time.Now().Unix(),
+		Version:   1,
+	}
+
+	return p.Publish(ctx, event)
+}
+
+// Publish publishes an event to Kafka
+func (p *KafkaPublisher) Publish(ctx context.Context, event *Event) error {
+	eventJSON, err := json.Marshal(event)
+	if err != nil {
+		return fmt.Errorf("failed to marshal event: %w", err)
+	}
+
+	message := &sarama.ProducerMessage{
+		Topic: p.topic,
+		Key:   sarama.StringEncoder(event.Aggregate),
+		Value: sarama.ByteEncoder(eventJSON),
+		Headers: []sarama.RecordHeader{
+			{
+				Key:   []byte("event-type"),
+				Value: []byte(event.Type),
+			},
+			{
+				Key:   []byte("event-id"),
+				Value: []byte(event.ID),
+			},
+		},
+	}
+
+	partition, offset, err := p.producer.SendMessage(message)
+	if err != nil {
+		p.logger.Error("Failed to publish event to Kafka",
+			zap.Error(err),
+			zap.String("topic", p.topic),
+			zap.String("event_id", event.ID),
+			zap.String("event_type", event.Type))
+		return fmt.Errorf("failed to send message to Kafka: %w", err)
+	}
+
+	p.logger.Info("Event published to Kafka",
 		zap.String("topic", p.topic),
-		zap.String("action", action),
-		zap.String("user_id", e.UserID),
-		zap.String("feature_code", e.FeatureCode),
-		zap.String("entitlement_id", e.ID.String()),
-		zap.String("plan_id", e.PlanID.String()),
-		zap.String("status", e.Status),
-	)
+		zap.Int32("partition", partition),
+		zap.Int64("offset", offset),
+		zap.String("event_id", event.ID),
+		zap.String("event_type", event.Type))
+
+	return nil
+}
+
+// PublishBatch publishes multiple events to Kafka
+func (p *KafkaPublisher) PublishBatch(ctx context.Context, events []*Event) error {
+	messages := make([]*sarama.ProducerMessage, len(events))
+
+	for i, event := range events {
+		eventJSON, err := json.Marshal(event)
+		if err != nil {
+			return fmt.Errorf("failed to marshal event %d: %w", i, err)
+		}
+
+		messages[i] = &sarama.ProducerMessage{
+			Topic: p.topic,
+			Key:   sarama.StringEncoder(event.Aggregate),
+			Value: sarama.ByteEncoder(eventJSON),
+			Headers: []sarama.RecordHeader{
+				{
+					Key:   []byte("event-type"),
+					Value: []byte(event.Type),
+				},
+				{
+					Key:   []byte("event-id"),
+					Value: []byte(event.ID),
+				},
+			},
+		}
+	}
+
+	err := p.producer.SendMessages(messages)
+	if err != nil {
+		p.logger.Error("Failed to publish batch to Kafka",
+			zap.Error(err),
+			zap.String("topic", p.topic),
+			zap.Int("event_count", len(events)))
+		return fmt.Errorf("failed to send batch to Kafka: %w", err)
+	}
+
+	p.logger.Info("Batch published to Kafka",
+		zap.String("topic", p.topic),
+		zap.Int("event_count", len(events)))
+
+	return nil
+}
+
+// Close closes the Kafka producer
+func (p *KafkaPublisher) Close() error {
+	if err := p.producer.Close(); err != nil {
+		p.logger.Error("Failed to close Kafka producer", zap.Error(err))
+		return fmt.Errorf("failed to close Kafka producer: %w", err)
+	}
+	p.logger.Info("Kafka producer closed")
 	return nil
 }

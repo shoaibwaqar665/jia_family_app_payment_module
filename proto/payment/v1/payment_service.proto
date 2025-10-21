@@ -3,6 +3,9 @@ syntax = "proto3";
 package payment.v1;
 
 import "google/protobuf/timestamp.proto";
+import "google/rpc/status.proto";
+import "google/rpc/error_details.proto";
+import "validate/validate.proto";
 
 option go_package = "github.com/jia-app/paymentservice/proto/payment/v1;paymentv1";
 
@@ -22,67 +25,81 @@ service PaymentService {
   
   // ListPayments retrieves a list of payments with pagination
   rpc ListPayments(ListPaymentsRequest) returns (ListPaymentsResponse);
+  
+  // CheckEntitlement checks if a user has access to a specific feature
+  rpc CheckEntitlement(CheckEntitlementRequest) returns (CheckEntitlementResponse);
+  
+  // ListUserEntitlements lists all entitlements for a user
+  rpc ListUserEntitlements(ListUserEntitlementsRequest) returns (ListUserEntitlementsResponse);
+  
+  // CreateCheckoutSession creates a checkout session for a plan
+  rpc CreateCheckoutSession(CreateCheckoutSessionRequest) returns (CreateCheckoutSessionResponse);
 }
 
 // CreatePaymentRequest represents a request to create a payment
 message CreatePaymentRequest {
-  int64 amount = 1;           // Amount in cents
-  string currency = 2;        // Currency code (e.g., USD, EUR)
-  string payment_method = 3;  // Payment method
-  string customer_id = 4;     // Customer identifier
-  string order_id = 5;        // Order identifier
-  string description = 6;     // Payment description
+  int64 amount = 1 [(validate.rules).int64.gt = 0];           // Amount in cents, must be greater than 0
+  string currency = 2 [(validate.rules).string = {pattern: "^[A-Z]{3}$"}];        // Currency code (e.g., USD, EUR), must be 3 uppercase letters
+  string payment_method = 3 [(validate.rules).string.min_len = 1];  // Payment method, must not be empty
+  string customer_id = 4 [(validate.rules).string.min_len = 1];     // Customer identifier, must not be empty
+  string order_id = 5 [(validate.rules).string.min_len = 1];        // Order identifier, must not be empty
+  string description = 6;     // Payment description (optional)
 }
 
 // CreatePaymentResponse represents a response to payment creation
 message CreatePaymentResponse {
   Payment payment = 1;
+  google.rpc.Status status = 2; // Rich error information
 }
 
 // GetPaymentRequest represents a request to retrieve a payment
 message GetPaymentRequest {
-  string id = 1;  // Payment ID
+  string id = 1 [(validate.rules).string.min_len = 1];  // Payment ID, must not be empty
 }
 
 // GetPaymentResponse represents a response with payment details
 message GetPaymentResponse {
   Payment payment = 1;
+  google.rpc.Status status = 2; // Rich error information
 }
 
 // UpdatePaymentStatusRequest represents a request to update payment status
 message UpdatePaymentStatusRequest {
-  string id = 1;      // Payment ID
-  string status = 2;  // New status
+  string id = 1 [(validate.rules).string.min_len = 1];      // Payment ID, must not be empty
+  string status = 2 [(validate.rules).string = {in: ["pending", "completed", "failed", "cancelled", "refunded"]}];  // New status, must be valid
 }
 
 // UpdatePaymentStatusResponse represents a response to status update
 message UpdatePaymentStatusResponse {
   bool success = 1;
+  google.rpc.Status status = 2; // Rich error information
 }
 
 // GetPaymentsByCustomerRequest represents a request to get customer payments
 message GetPaymentsByCustomerRequest {
-  string customer_id = 1;  // Customer identifier
-  int32 limit = 2;         // Maximum number of payments to return
-  int32 offset = 3;        // Number of payments to skip
+  string customer_id = 1 [(validate.rules).string.min_len = 1];  // Customer identifier, must not be empty
+  int32 limit = 2 [(validate.rules).int32 = {gte: 1, lte: 100}];         // Maximum number of payments to return, between 1 and 100
+  int32 offset = 3 [(validate.rules).int32.gte = 0];        // Number of payments to skip, must be >= 0
 }
 
 // GetPaymentsByCustomerResponse represents a response with customer payments
 message GetPaymentsByCustomerResponse {
   repeated Payment payments = 1;
   int32 total = 2;
+  google.rpc.Status status = 3; // Rich error information
 }
 
 // ListPaymentsRequest represents a request to list payments
 message ListPaymentsRequest {
-  int32 limit = 1;   // Maximum number of payments to return
-  int32 offset = 2;  // Number of payments to skip
+  int32 limit = 1 [(validate.rules).int32 = {gte: 1, lte: 100}];   // Maximum number of payments to return, between 1 and 100
+  int32 offset = 2 [(validate.rules).int32.gte = 0];  // Number of payments to skip, must be >= 0
 }
 
 // ListPaymentsResponse represents a response with payments list
 message ListPaymentsResponse {
   repeated Payment payments = 1;
   int32 total = 2;
+  google.rpc.Status status = 3; // Rich error information
 }
 
 // Payment represents a payment transaction
@@ -116,4 +133,94 @@ enum PaymentMethod {
   PAYMENT_METHOD_DEBIT_CARD = 2;
   PAYMENT_METHOD_BANK_TRANSFER = 3;
   PAYMENT_METHOD_DIGITAL_WALLET = 4;
+}
+
+// Error codes for payment service
+enum PaymentErrorCode {
+  PAYMENT_ERROR_CODE_UNSPECIFIED = 0;
+  PAYMENT_ERROR_CODE_INVALID_REQUEST = 1;
+  PAYMENT_ERROR_CODE_PAYMENT_NOT_FOUND = 2;
+  PAYMENT_ERROR_CODE_PAYMENT_ALREADY_EXISTS = 3;
+  PAYMENT_ERROR_CODE_INVALID_AMOUNT = 4;
+  PAYMENT_ERROR_CODE_INVALID_CURRENCY = 5;
+  PAYMENT_ERROR_CODE_INVALID_PAYMENT_METHOD = 6;
+  PAYMENT_ERROR_CODE_INSUFFICIENT_FUNDS = 7;
+  PAYMENT_ERROR_CODE_PAYMENT_DECLINED = 8;
+  PAYMENT_ERROR_CODE_PROCESSING_ERROR = 9;
+  PAYMENT_ERROR_CODE_TIMEOUT = 10;
+  PAYMENT_ERROR_CODE_RATE_LIMITED = 11;
+  PAYMENT_ERROR_CODE_UNAUTHORIZED = 12;
+  PAYMENT_ERROR_CODE_FORBIDDEN = 13;
+  PAYMENT_ERROR_CODE_SERVICE_UNAVAILABLE = 14;
+}
+
+// PaymentErrorDetails provides detailed error information
+message PaymentErrorDetails {
+  PaymentErrorCode code = 1;
+  string message = 2;
+  repeated google.rpc.BadRequest.FieldViolation field_violations = 3;
+  google.rpc.RetryInfo retry_info = 4;
+  google.rpc.DebugInfo debug_info = 5;
+  google.rpc.QuotaFailure quota_failure = 6;
+  google.rpc.ErrorInfo error_info = 7;
+  google.rpc.PreconditionFailure precondition_failure = 8;
+  google.rpc.RequestInfo request_info = 9;
+  google.rpc.ResourceInfo resource_info = 10;
+  google.rpc.Help help = 11;
+  google.rpc.LocalizedMessage localized_message = 12;
+}
+
+// CheckEntitlementRequest represents a request to check user entitlement
+message CheckEntitlementRequest {
+  string user_id = 1;        // User identifier (optional, will use authenticated user if not provided)
+  string feature_code = 2 [(validate.rules).string.min_len = 1];  // Feature code to check, must not be empty
+}
+
+// CheckEntitlementResponse represents a response to entitlement check
+message CheckEntitlementResponse {
+  bool allowed = 1;         // Whether the user has access to the feature
+  Entitlement entitlement = 2;  // Entitlement details if allowed
+  google.rpc.Status status = 3; // Rich error information
+}
+
+// ListUserEntitlementsRequest represents a request to list user entitlements
+message ListUserEntitlementsRequest {
+  string user_id = 1;       // User identifier (optional, will use authenticated user if not provided)
+}
+
+// ListUserEntitlementsResponse represents a response with user entitlements
+message ListUserEntitlementsResponse {
+  repeated Entitlement entitlements = 1;
+  google.rpc.Status status = 2; // Rich error information
+}
+
+// CreateCheckoutSessionRequest represents a request to create a checkout session
+message CreateCheckoutSessionRequest {
+  string plan_id = 1 [(validate.rules).string.min_len = 1];  // Plan identifier, must not be empty
+  string user_id = 2;       // User identifier (optional, will use authenticated user if not provided)
+}
+
+// CreateCheckoutSessionResponse represents a response with checkout session details
+message CreateCheckoutSessionResponse {
+  string provider = 1;      // Payment provider (e.g., "stripe")
+  string session_id = 2;    // Checkout session ID
+  string redirect_url = 3;  // URL to redirect user to complete payment
+  google.rpc.Status status = 4; // Rich error information
+}
+
+// Entitlement represents a user's entitlement to a feature
+message Entitlement {
+  string id = 1;                    // Entitlement identifier
+  string user_id = 2;               // User identifier
+  string family_id = 3;             // Family identifier (optional)
+  string feature_code = 4;          // Feature code
+  string plan_id = 5;               // Plan identifier
+  string subscription_id = 6;       // Subscription identifier (optional)
+  string status = 7;                // Entitlement status
+  google.protobuf.Timestamp granted_at = 8;   // When the entitlement was granted
+  google.protobuf.Timestamp expires_at = 9;   // When the entitlement expires (optional)
+  google.protobuf.Struct usage_limits = 10;   // Usage limits (optional)
+  google.protobuf.Struct metadata = 11;       // Additional metadata (optional)
+  google.protobuf.Timestamp created_at = 12;  // Creation timestamp
+  google.protobuf.Timestamp updated_at = 13;  // Last update timestamp
 }

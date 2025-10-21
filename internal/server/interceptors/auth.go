@@ -2,6 +2,8 @@ package interceptors
 
 import (
 	"context"
+	"strings"
+	"time"
 
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -15,16 +17,20 @@ import (
 
 // AuthInterceptor provides authentication middleware for gRPC
 type AuthInterceptor struct {
-	// Whitelisted methods that don't require authentication
+	validator          auth.Validator
 	whitelistedMethods map[string]bool
 }
 
 // NewAuthInterceptor creates a new authentication interceptor
-func NewAuthInterceptor() *AuthInterceptor {
+func NewAuthInterceptor(validator auth.Validator, whitelistedMethods []string) *AuthInterceptor {
+	whitelistMap := make(map[string]bool)
+	for _, method := range whitelistedMethods {
+		whitelistMap[method] = true
+	}
+
 	return &AuthInterceptor{
-		whitelistedMethods: map[string]bool{
-			"/payment.v1.PaymentService/PaymentSuccessWebhook": true,
-		},
+		validator:          validator,
+		whitelistedMethods: whitelistMap,
 	}
 }
 
@@ -103,26 +109,43 @@ func (i *AuthInterceptor) authenticate(ctx context.Context) (string, error) {
 		return "", status.Errorf(codes.Unauthenticated, "metadata is not provided")
 	}
 
-	// Look for authorization metadata with key "better-auth-token"
-	authTokens := md.Get("better-auth-token")
-	if len(authTokens) == 0 {
-		// Fallback to standard "authorization" header
-		authTokens = md.Get("authorization")
-	}
-
+	// Look for authorization metadata with standard "authorization" header
+	authTokens := md.Get("authorization")
 	if len(authTokens) == 0 {
 		return "", status.Errorf(codes.Unauthenticated, "authorization token is not provided")
 	}
 
+	// Security: Only use the first authorization header to prevent header injection
 	token := authTokens[0]
 	if token == "" {
 		return "", status.Errorf(codes.Unauthenticated, "invalid authorization token")
 	}
 
-	// Validate token using the auth validator
-	userID, err := auth.Validate(ctx, token)
+	// Extract token from Bearer format
+	token = auth.ExtractTokenFromAuthHeader(token)
+	if token == "" {
+		return "", status.Errorf(codes.Unauthenticated, "invalid authorization token format")
+	}
+
+	// Security: Validate token length to prevent extremely short tokens
+	if len(token) < 10 {
+		return "", status.Errorf(codes.Unauthenticated, "authorization token too short")
+	}
+
+	// Security: Set timeout for token validation to prevent hanging
+	validationCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	// Validate token using the provided validator
+	userID, err := i.validator.Validate(validationCtx, token)
 	if err != nil {
-		return "", status.Errorf(codes.Unauthenticated, "token validation failed: %v", err)
+		// Security: Don't expose internal validation errors
+		return "", status.Errorf(codes.Unauthenticated, "token validation failed")
+	}
+
+	// Security: Validate user ID is not empty
+	if strings.TrimSpace(userID) == "" {
+		return "", status.Errorf(codes.Unauthenticated, "invalid user ID")
 	}
 
 	return userID, nil

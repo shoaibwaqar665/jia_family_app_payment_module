@@ -6,34 +6,17 @@ import (
 	"strings"
 )
 
+// Validator interface for token validation
+type Validator interface {
+	Validate(ctx context.Context, token string) (userID string, err error)
+}
+
 // Validate validates a token and returns the user ID
-// This is a stub implementation that treats any non-empty token as valid
-// and extracts a fake spiff_id_* from a claim placeholder
+// This function should not be used in production - use specific validators instead
 func Validate(ctx context.Context, token string) (userID string, err error) {
-	if token == "" {
-		return "", fmt.Errorf("empty token")
-	}
-
-	// For now, treat any non-empty token as valid
-	// In a real implementation, this would validate JWT, check expiration, etc.
-
-	// Extract fake user ID from token (placeholder for real JWT claims)
-	// Format: "Bearer spiff_id_12345" or just "spiff_id_12345"
-	token = strings.TrimPrefix(token, "Bearer ")
-
-	if strings.HasPrefix(token, "spiff_id_") {
-		return token, nil
-	}
-
-	// If no spiff_id prefix, generate a fake one based on token
-	// This is just for demonstration - real implementation would parse JWT claims
-	if len(token) > 8 {
-		fakeUserID := fmt.Sprintf("spiff_id_%s", token[:8])
-		return fakeUserID, nil
-	}
-	// For short tokens, use the entire token
-	fakeUserID := fmt.Sprintf("spiff_id_%s", token)
-	return fakeUserID, nil
+	// SECURITY: Mock validator fallback removed for production safety
+	// Use NewJWTValidator or NewSPIFFEValidator directly in your application
+	return "", fmt.Errorf("validator fallback removed for security - use specific validator")
 }
 
 // ExtractTokenFromAuthHeader extracts the token from an Authorization header

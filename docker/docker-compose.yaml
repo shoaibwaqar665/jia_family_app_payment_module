@@ -6,9 +6,9 @@ services:
     image: postgres:16
     container_name: paymentservice_postgres
     environment:
-      POSTGRES_DB: payments
-      POSTGRES_USER: app
-      POSTGRES_PASSWORD: app
+      POSTGRES_DB: ${POSTGRES_DB:-payments}
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app}
       POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
     ports:
       - "5432:5432"
@@ -65,25 +65,53 @@ services:
     profiles:
       - sqlc
 
-  # Payment Service (optional, for local development)
+  # Envoy API Gateway
+  envoy:
+    image: envoyproxy/envoy:v1.28-latest
+    container_name: paymentservice_envoy
+    ports:
+      - "8080:8080"  # HTTP/REST API
+      - "8443:8443"  # gRPC (if needed)
+      - "9901:9901"  # Admin interface
+    volumes:
+      - ./envoy.yaml:/etc/envoy/envoy.yaml:ro
+      - ../proto:/etc/envoy/proto:ro
+    command: /usr/local/bin/envoy -c /etc/envoy/envoy.yaml --service-cluster payment-service-gateway
+    depends_on:
+      - paymentservice
+    networks:
+      - paymentservice_network
+    profiles:
+      - dev
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9901/server_info"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Payment Service (internal, not exposed directly)
   paymentservice:
     build:
       context: ..
       dockerfile: docker/Dockerfile
     container_name: paymentservice_app
-    ports:
-      - "50051:50051"
+    # Note: No direct port exposure - only accessible via Envoy
     environment:
       - DB_HOST=postgres
       - DB_PORT=5432
-      - DB_USER=app
-      - DB_PASSWORD=app
-      - DB_NAME=payments
+      - DB_USER=${POSTGRES_USER:-app}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-app}
+      - DB_NAME=${POSTGRES_DB:-payments}
       - DB_SSLMODE=disable
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_DB=0
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
       - SERVER_PORT=50051
+      - JWT_PUBLIC_KEY_PATH=/etc/secrets/jwt_public_key.pem
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_PUBLISHABLE_KEY=${STRIPE_PUBLISHABLE_KEY}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
     depends_on:
       postgres:
         condition: service_healthy
@@ -93,6 +121,11 @@ services:
       - paymentservice_network
     profiles:
       - dev
+    healthcheck:
+      test: ["CMD", "grpc_health_probe", "-addr=:50051"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres_data:

@@ -114,3 +114,14 @@ func GetDomainError(err error) *DomainError {
 	}
 	return nil
 }
+
+// Predefined domain errors for common cases
+var (
+	ErrPaymentNotFound      = NewNotFoundError("Payment", "")
+	ErrInvalidPaymentID     = NewInvalidInputError("Invalid payment ID", "")
+	ErrInvalidAmount        = NewInvalidInputError("Invalid payment amount", "")
+	ErrInvalidCurrency      = NewInvalidInputError("Invalid currency", "")
+	ErrPaymentAlreadyExists = NewAlreadyExistsError("Payment", "")
+	ErrUnauthorized         = NewUnauthorizedError("Unauthorized access")
+	ErrPermissionDenied     = NewUnauthorizedError("Permission denied")
+)

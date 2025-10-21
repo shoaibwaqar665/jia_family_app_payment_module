@@ -2,12 +2,14 @@ package interceptors
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
 	"github.com/jia-app/paymentservice/internal/log"
@@ -36,8 +38,9 @@ func (i *LoggingInterceptor) Unary() grpc.UnaryServerInterceptor {
 		ctx = log.WithRequestID(ctx, requestID)
 
 		// Extract user_id from metadata if available
-		// TODO: Extract from JWT token or metadata
-		// ctx = log.WithUserID(ctx, extractUserID(ctx))
+		if userID := extractUserIDFromMetadata(ctx); userID != "" {
+			ctx = log.WithUserID(ctx, userID)
+		}
 
 		// Log request start
 		log.Info(ctx, "gRPC request started",
@@ -128,4 +131,40 @@ type wrappedServerStream struct {
 // Context returns the wrapped context
 func (w *wrappedServerStream) Context() context.Context {
 	return w.ctx
+}
+
+// extractUserIDFromMetadata extracts user ID from gRPC metadata
+func extractUserIDFromMetadata(ctx context.Context) string {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return ""
+	}
+
+	// Check for user_id in metadata
+	if userIDs := md.Get("user_id"); len(userIDs) > 0 {
+		return userIDs[0]
+	}
+
+	// Check for authorization header and extract from JWT token
+	if authHeaders := md.Get("authorization"); len(authHeaders) > 0 {
+		authHeader := authHeaders[0]
+		if strings.HasPrefix(authHeader, "Bearer ") {
+			token := strings.TrimPrefix(authHeader, "Bearer ")
+			// In a real implementation, you would decode the JWT token here
+			// For now, we'll just return a placeholder
+			if token != "" {
+				return "jwt_user_" + token[:min(len(token), 8)] // Use first 8 chars as placeholder
+			}
+		}
+	}
+
+	return ""
+}
+
+// min returns the minimum of two integers
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

@@ -2,60 +2,146 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
-	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jia-app/paymentservice/internal/domain"
 	"github.com/jia-app/paymentservice/internal/repository"
+	"github.com/jia-app/paymentservice/internal/repository/postgres/pgstore"
+	_ "github.com/lib/pq"
+	"github.com/sqlc-dev/pqtype"
 )
 
 // Store represents the PostgreSQL store implementation
 type Store struct {
-	db *pgxpool.Pool
-	// TODO: Add sqlc generated queries
+	db      *sql.DB
+	queries *pgstore.Queries
 }
 
 // NewStore creates a new PostgreSQL store
 func NewStore(connString string) (*Store, error) {
-	config, err := pgxpool.ParseConfig(connString)
+	db, err := sql.Open("postgres", connString)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse connection string: %w", err)
-	}
-
-	pool, err := pgxpool.NewWithConfig(context.Background(), config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create connection pool: %w", err)
+		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
 	// Test the connection
-	if err := pool.Ping(context.Background()); err != nil {
+	if err := db.Ping(); err != nil {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	return &Store{db: pool}, nil
+	return &Store{db: db, queries: pgstore.New(db)}, nil
 }
 
-// NewStoreWithPool creates a new PostgreSQL store with an existing pool
-func NewStoreWithPool(pool *pgxpool.Pool) (*Store, error) {
-	if pool == nil {
-		return nil, fmt.Errorf("database pool cannot be nil")
+// NewStoreWithDB creates a new PostgreSQL store with an existing database connection
+func NewStoreWithDB(db *sql.DB) (*Store, error) {
+	if db == nil {
+		return nil, fmt.Errorf("database connection cannot be nil")
 	}
 
-	return &Store{db: pool}, nil
+	return &Store{db: db, queries: pgstore.New(db)}, nil
 }
 
 // Close closes the database connection
 func (s *Store) Close() error {
 	if s.db != nil {
-		s.db.Close()
+		return s.db.Close()
 	}
 	return nil
 }
 
+// Transaction represents a database transaction
+type Transaction struct {
+	tx      *sql.Tx
+	queries *pgstore.Queries
+}
+
+// BeginTx starts a new transaction
+func (s *Store) BeginTx(ctx context.Context) (*Transaction, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+
+	return &Transaction{
+		tx:      tx,
+		queries: pgstore.New(tx),
+	}, nil
+}
+
+// Commit commits the transaction
+func (t *Transaction) Commit() error {
+	if err := t.tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+	return nil
+}
+
+// Rollback rolls back the transaction
+func (t *Transaction) Rollback() error {
+	if err := t.tx.Rollback(); err != nil {
+		return fmt.Errorf("failed to rollback transaction: %w", err)
+	}
+	return nil
+}
+
+// Payment returns the payment repository implementation for this transaction
+func (t *Transaction) Payment() repository.PaymentRepository {
+	return &paymentRepository{store: &Store{db: nil, queries: t.queries}}
+}
+
+// Plan returns the plan repository implementation for this transaction
+func (t *Transaction) Plan() repository.PlanRepository {
+	return &planRepository{store: &Store{db: nil, queries: t.queries}}
+}
+
+// Entitlement returns the entitlement repository implementation for this transaction
+func (t *Transaction) Entitlement() repository.EntitlementRepository {
+	return &entitlementRepository{store: &Store{db: nil, queries: t.queries}}
+}
+
+// WebhookEvents returns the webhook events repository implementation for this transaction
+func (t *Transaction) WebhookEvents() repository.WebhookEventsRepository {
+	return &webhookEventsRepository{store: &Store{db: nil, queries: t.queries}}
+}
+
+// Outbox returns the outbox repository implementation for this transaction
+func (t *Transaction) Outbox() repository.OutboxRepository {
+	return &outboxRepository{store: &Store{db: nil, queries: t.queries}}
+}
+
+// WithTransaction executes a function within a transaction (implements TransactionManager interface)
+func (s *Store) WithTransaction(ctx context.Context, fn func(repository.Transaction) error) error {
+	tx, err := s.BeginTx(ctx)
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		if p := recover(); p != nil {
+			// Rollback on panic
+			if rollbackErr := tx.Rollback(); rollbackErr != nil {
+				// Log rollback error but don't mask the original panic
+				fmt.Printf("Failed to rollback transaction after panic: %v\n", rollbackErr)
+			}
+			panic(p) // Re-throw the panic
+		}
+	}()
+
+	if err := fn(tx); err != nil {
+		// Rollback on error
+		if rollbackErr := tx.Rollback(); rollbackErr != nil {
+			return fmt.Errorf("failed to rollback transaction: %w (original error: %v)", rollbackErr, err)
+		}
+		return err
+	}
+
+	// Commit on success
+	return tx.Commit()
+}
+
 // Payment returns the payment repository implementation
 func (s *Store) Payment() repository.PaymentRepository {
-	// TODO: Return actual implementation
 	return &paymentRepository{store: s}
 }
 
@@ -69,113 +155,79 @@ func (s *Store) Entitlement() repository.EntitlementRepository {
 	return &entitlementRepository{store: s}
 }
 
+// WebhookEvents returns the webhook events repository implementation
+func (s *Store) WebhookEvents() repository.WebhookEventsRepository {
+	return &webhookEventsRepository{store: s}
+}
+
+// Outbox returns the outbox repository implementation
+func (s *Store) Outbox() repository.OutboxRepository {
+	return &outboxRepository{store: s}
+}
+
 // paymentRepository implements repository.PaymentRepository
 type paymentRepository struct {
 	store *Store
 }
 
-// Create creates a new payment
+// Create creates a new payment using sqlc generated code
 func (r *paymentRepository) Create(ctx context.Context, payment *domain.Payment) error {
-	// TODO: Implement with sqlc generated queries
-	return fmt.Errorf("not implemented")
+	// Handle nullable Stripe fields safely
+	var stripePaymentIntentID sql.NullString
+	if payment.StripePaymentIntentID != nil {
+		stripePaymentIntentID = sql.NullString{String: *payment.StripePaymentIntentID, Valid: true}
+	}
+
+	var stripeSessionID sql.NullString
+	if payment.StripeSessionID != nil {
+		stripeSessionID = sql.NullString{String: *payment.StripeSessionID, Valid: true}
+	}
+
+	_, err := r.store.queries.CreatePayment(ctx, pgstore.CreatePaymentParams{
+		ID:                    payment.ID,
+		Amount:                int32(payment.Amount),
+		Currency:              payment.Currency,
+		Status:                payment.Status,
+		PaymentMethod:         payment.PaymentMethod,
+		CustomerID:            payment.CustomerID,
+		OrderID:               payment.OrderID,
+		Description:           sql.NullString{String: payment.Description, Valid: payment.Description != ""},
+		StripePaymentIntentID: stripePaymentIntentID,
+		StripeSessionID:       stripeSessionID,
+		Metadata:              pqtype.NullRawMessage{RawMessage: payment.Metadata, Valid: len(payment.Metadata) > 0},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create payment: %w", err)
+	}
+	return nil
 }
 
-// GetByID retrieves a payment by ID
-func (r *paymentRepository) GetByID(ctx context.Context, id string) (*domain.Payment, error) {
-	// TODO: Implement with sqlc generated queries
-	return nil, fmt.Errorf("not implemented")
-}
-
-// GetByOrderID retrieves a payment by order ID
-func (r *paymentRepository) GetByOrderID(ctx context.Context, orderID string) (*domain.Payment, error) {
-	// TODO: Implement with sqlc generated queries
-	return nil, fmt.Errorf("not implemented")
-}
-
-// GetByCustomerID retrieves payments by customer ID
-func (r *paymentRepository) GetByCustomerID(ctx context.Context, customerID string, limit, offset int) ([]*domain.Payment, error) {
-	// TODO: Implement with sqlc generated queries
-	return nil, fmt.Errorf("not implemented")
-}
-
-// Update updates an existing payment
-func (r *paymentRepository) Update(ctx context.Context, payment *domain.Payment) error {
-	// TODO: Implement with sqlc generated queries
-	return fmt.Errorf("not implemented")
-}
-
-// UpdateStatus updates only the status of a payment
-func (r *paymentRepository) UpdateStatus(ctx context.Context, id string, status string) error {
-	// TODO: Implement with sqlc generated queries
-	return fmt.Errorf("not implemented")
-}
-
-// Delete deletes a payment (soft delete)
-func (r *paymentRepository) Delete(ctx context.Context, id string) error {
-	// TODO: Implement with sqlc generated queries
-	return fmt.Errorf("not implemented")
-}
-
-// List retrieves a list of payments with pagination
-func (r *paymentRepository) List(ctx context.Context, limit, offset int) ([]*domain.Payment, error) {
-	// TODO: Implement with sqlc generated queries
-	return nil, fmt.Errorf("not implemented")
-}
-
-// Count returns the total number of payments
-func (r *paymentRepository) Count(ctx context.Context) (int64, error) {
-	// TODO: Implement with sqlc generated queries
-	return 0, fmt.Errorf("not implemented")
-}
+// Payment repository methods are implemented in store_sqlc.go
 
 // planRepository implements repository.PlanRepository
 type planRepository struct {
 	store *Store
 }
 
-// GetByID retrieves a plan by ID
-func (r *planRepository) GetByID(ctx context.Context, id string) (domain.Plan, error) {
-	// TODO: Implement with sqlc generated queries
-	return domain.Plan{}, fmt.Errorf("not implemented")
-}
-
-// ListActive retrieves all active plans
-func (r *planRepository) ListActive(ctx context.Context) ([]domain.Plan, error) {
-	// TODO: Implement with sqlc generated queries
-	return nil, fmt.Errorf("not implemented")
-}
+// Plan repository methods are implemented in store_sqlc.go
 
 // entitlementRepository implements repository.EntitlementRepository
 type entitlementRepository struct {
 	store *Store
 }
 
-// Check checks if a user has an active entitlement for a feature
-func (r *entitlementRepository) Check(ctx context.Context, userID, featureCode string) (domain.Entitlement, bool, error) {
-	// TODO: Implement with sqlc generated queries
-	return domain.Entitlement{}, false, fmt.Errorf("not implemented")
+// Entitlement repository methods are implemented in store_sqlc.go
+
+// webhookEventsRepository implements repository.WebhookEventsRepository
+type webhookEventsRepository struct {
+	store *Store
 }
 
-// ListByUser retrieves all entitlements for a user
-func (r *entitlementRepository) ListByUser(ctx context.Context, userID string) ([]domain.Entitlement, error) {
-	// TODO: Implement with sqlc generated queries
-	return nil, fmt.Errorf("not implemented")
+// Outbox repository methods are implemented in store_sqlc.go
+
+// outboxRepository implements repository.OutboxRepository
+type outboxRepository struct {
+	store *Store
 }
 
-// Insert creates a new entitlement
-func (r *entitlementRepository) Insert(ctx context.Context, e domain.Entitlement) (domain.Entitlement, error) {
-	// TODO: Implement with sqlc generated queries
-	return domain.Entitlement{}, fmt.Errorf("not implemented")
-}
-
-// UpdateStatus updates the status of an entitlement
-func (r *entitlementRepository) UpdateStatus(ctx context.Context, id, status string) error {
-	// TODO: Implement with sqlc generated queries
-	return fmt.Errorf("not implemented")
-}
-
-// UpdateExpiry updates the expiry time of an entitlement
-func (r *entitlementRepository) UpdateExpiry(ctx context.Context, id string, expiresAt *time.Time) error {
-	// TODO: Implement with sqlc generated queries
-	return fmt.Errorf("not implemented")
-}
+// Outbox repository methods are implemented in store_sqlc.go

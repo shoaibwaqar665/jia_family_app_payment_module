@@ -10,6 +10,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
+	"github.com/jia-app/paymentservice/internal/auth"
 	"github.com/jia-app/paymentservice/internal/log"
 )
 
@@ -18,8 +19,10 @@ func ExampleAuthInterceptor() {
 	// Initialize logger for testing
 	_ = log.Init("info")
 
-	// Create auth interceptor
-	authInterceptor := NewAuthInterceptor()
+	// Create auth interceptor with mock validator
+	mockValidator := auth.NewMockValidator()
+	whitelistedMethods := []string{"/payment.v1.PaymentService/PaymentSuccessWebhook"}
+	authInterceptor := NewAuthInterceptor(mockValidator, whitelistedMethods)
 
 	// Example gRPC method info
 	methodInfo := &grpc.UnaryServerInfo{
@@ -53,8 +56,10 @@ func TestAuthInterceptor(t *testing.T) {
 	// Initialize logger for testing
 	_ = log.Init("info")
 
-	// Create auth interceptor
-	authInterceptor := NewAuthInterceptor()
+	// Create auth interceptor with mock validator
+	mockValidator := auth.NewMockValidator()
+	whitelistedMethods := []string{"/payment.v1.PaymentService/PaymentSuccessWebhook"}
+	authInterceptor := NewAuthInterceptor(mockValidator, whitelistedMethods)
 
 	// Test handler that returns success
 	successHandler := func(ctx context.Context, req interface{}) (interface{}, error) {

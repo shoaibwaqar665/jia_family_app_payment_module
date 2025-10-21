@@ -2,6 +2,9 @@ package server
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"fmt"
 	"net"
 	"os"
 	"os/signal"
@@ -11,17 +14,22 @@ import (
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_zap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"database/sql"
+
+	"github.com/jia-app/paymentservice/internal/auth"
 	"github.com/jia-app/paymentservice/internal/config"
 	"github.com/jia-app/paymentservice/internal/log"
+	"github.com/jia-app/paymentservice/internal/ratelimit"
 	"github.com/jia-app/paymentservice/internal/server/interceptors"
 	"github.com/redis/go-redis/v9"
 )
@@ -32,18 +40,37 @@ type GRPCServer struct {
 	config       *config.Config
 	logger       *zap.Logger
 	healthServer *health.Server
-	dbPool       *pgxpool.Pool
+	db           *sql.DB
 	redisClient  *redis.Client
+	rateLimiter  ratelimit.RateLimiter
 }
 
 // NewGRPCServer creates a new gRPC server instance with all interceptors
-func NewGRPCServer(cfg *config.Config, dbPool *pgxpool.Pool, redisClient *redis.Client) *GRPCServer {
+func NewGRPCServer(cfg *config.Config, db *sql.DB, redisClient *redis.Client, validator auth.Validator) *GRPCServer {
 	// Get logger instance
 	logger := log.L(context.Background())
 
 	// Create interceptors
-	authInterceptor := interceptors.NewAuthInterceptor()
+	authInterceptor := interceptors.NewAuthInterceptor(validator, cfg.Auth.WhitelistedMethods)
 	loggingInterceptor := interceptors.NewLoggingInterceptor()
+	errorHandlerInterceptor := interceptors.NewErrorHandlerInterceptor()
+
+	// Create timeout interceptor with method-specific timeouts
+	methodTimeouts := map[string]time.Duration{
+		"/payment.v1.PaymentService/CreatePayment":         30 * time.Second,
+		"/payment.v1.PaymentService/CreateCheckoutSession": 30 * time.Second,
+		"/payment.v1.PaymentService/PaymentSuccessWebhook": 10 * time.Second,
+	}
+	timeoutInterceptor := interceptors.NewTimeoutInterceptor(15*time.Second, methodTimeouts)
+
+	// Initialize rate limiter if Redis is available
+	var rateLimiter ratelimit.RateLimiter
+	if redisClient != nil {
+		rateLimiter = ratelimit.NewRedisRateLimiter(redisClient, logger)
+		logger.Info("Rate limiter initialized with Redis")
+	} else {
+		logger.Warn("Redis not available, rate limiting disabled")
+	}
 
 	// Recovery options
 	recoveryOpts := []grpc_recovery.Option{
@@ -58,21 +85,64 @@ func NewGRPCServer(cfg *config.Config, dbPool *pgxpool.Pool, redisClient *redis.
 		grpc_zap.WithLevels(grpc_zap.DefaultCodeToLevel),
 	}
 
+	// Setup TLS credentials if enabled - CRITICAL: Fail if TLS setup fails
+	var creds credentials.TransportCredentials
+	if cfg.GRPC.TLSEnabled {
+		tlsCreds, err := setupTLS(cfg.GRPC)
+		if err != nil {
+			logger.Fatal("Failed to setup TLS - refusing to start server without TLS", zap.Error(err))
+		}
+		creds = tlsCreds
+		logger.Info("TLS enabled for gRPC server",
+			zap.String("cert_file", cfg.GRPC.CertFile),
+			zap.String("key_file", cfg.GRPC.KeyFile))
+	} else {
+		logger.Warn("TLS disabled for gRPC server - not recommended for production")
+	}
+
 	// Create server with interceptor chain
-	server := grpc.NewServer(
-		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
-			grpc_recovery.UnaryServerInterceptor(recoveryOpts...),
-			grpc_zap.UnaryServerInterceptor(logger, zapOpts...),
-			authInterceptor.Unary(),
-			loggingInterceptor.Unary(),
-		)),
-		grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(
-			grpc_recovery.StreamServerInterceptor(recoveryOpts...),
-			grpc_zap.StreamServerInterceptor(logger, zapOpts...),
-			authInterceptor.Stream(),
-			loggingInterceptor.Stream(),
-		)),
+	var serverOpts []grpc.ServerOption
+
+	// Build interceptor chain
+	unaryInterceptors := []grpc.UnaryServerInterceptor{
+		otelgrpc.UnaryServerInterceptor(),
+		grpc_recovery.UnaryServerInterceptor(recoveryOpts...),
+		grpc_zap.UnaryServerInterceptor(logger, zapOpts...),
+		timeoutInterceptor.Unary(),
+		authInterceptor.Unary(),
+		errorHandlerInterceptor.Unary(),
+		loggingInterceptor.Unary(),
+	}
+
+	streamInterceptors := []grpc.StreamServerInterceptor{
+		otelgrpc.StreamServerInterceptor(),
+		grpc_recovery.StreamServerInterceptor(recoveryOpts...),
+		grpc_zap.StreamServerInterceptor(logger, zapOpts...),
+		timeoutInterceptor.Stream(),
+		authInterceptor.Stream(),
+		errorHandlerInterceptor.Stream(),
+		loggingInterceptor.Stream(),
+	}
+
+	// Add rate limiting interceptor if available
+	if rateLimiter != nil {
+		rateLimitConfig := ratelimit.DefaultConfig()
+		rateLimitInterceptor := ratelimit.UnaryServerInterceptor(rateLimiter, rateLimitConfig)
+		unaryInterceptors = append(unaryInterceptors, rateLimitInterceptor)
+		logger.Info("Rate limiting interceptor added")
+	}
+
+	serverOpts = append(serverOpts,
+		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(unaryInterceptors...)),
+		grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(streamInterceptors...)),
 	)
+
+	// Add TLS credentials if configured
+	if creds != nil {
+		serverOpts = append(serverOpts, grpc.Creds(creds))
+	}
+
+	server := grpc.NewServer(serverOpts...)
 
 	// Register health check service
 	healthServer := health.NewServer()
@@ -93,8 +163,9 @@ func NewGRPCServer(cfg *config.Config, dbPool *pgxpool.Pool, redisClient *redis.
 		config:       cfg,
 		logger:       logger,
 		healthServer: healthServer,
-		dbPool:       dbPool,
+		db:           db,
 		redisClient:  redisClient,
+		rateLimiter:  rateLimiter,
 	}
 }
 
@@ -174,11 +245,11 @@ func (s *GRPCServer) checkDependencies() {
 
 // checkDatabase checks if the database is reachable
 func (s *GRPCServer) checkDatabase(ctx context.Context) bool {
-	if s.dbPool == nil {
+	if s.db == nil {
 		return false
 	}
 
-	if err := s.dbPool.Ping(ctx); err != nil {
+	if err := s.db.PingContext(ctx); err != nil {
 		s.logger.Debug("Database health check failed", zap.Error(err))
 		return false
 	}
@@ -198,6 +269,148 @@ func (s *GRPCServer) checkRedis(ctx context.Context) bool {
 	}
 
 	return true
+}
+
+// setupTLS configures TLS credentials for the gRPC server
+func setupTLS(cfg config.GRPCConfig) (credentials.TransportCredentials, error) {
+	// Load server certificate and key
+	cert, err := tls.LoadX509KeyPair(cfg.CertFile, cfg.KeyFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load server certificate: %w", err)
+	}
+
+	// Validate server certificate
+	if err := validateServerCertificate(cert); err != nil {
+		return nil, fmt.Errorf("server certificate validation failed: %w", err)
+	}
+
+	// Create TLS config with enhanced security
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		MinVersion:   tls.VersionTLS12,
+		MaxVersion:   tls.VersionTLS13, // Use TLS 1.3 when available
+		CipherSuites: []uint16{
+			// TLS 1.2 cipher suites (in order of preference)
+			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
+			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
+			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+		},
+		PreferServerCipherSuites: true,
+		// Enable session resumption
+		SessionTicketsDisabled: false,
+	}
+
+	// If client CA file is provided, enable mTLS
+	if cfg.ClientCAFile != "" {
+		caCert, err := os.ReadFile(cfg.ClientCAFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read client CA file: %w", err)
+		}
+
+		caCertPool := x509.NewCertPool()
+		if !caCertPool.AppendCertsFromPEM(caCert) {
+			return nil, fmt.Errorf("failed to parse client CA certificate")
+		}
+
+		tlsConfig.ClientCAs = caCertPool
+		tlsConfig.ClientAuth = tls.RequireAndVerifyClientCert
+
+		// Enhanced client certificate validation
+		tlsConfig.VerifyPeerCertificate = func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+			if len(rawCerts) == 0 {
+				return fmt.Errorf("no client certificate provided")
+			}
+
+			// Parse client certificate
+			clientCert, err := x509.ParseCertificate(rawCerts[0])
+			if err != nil {
+				return fmt.Errorf("failed to parse client certificate: %w", err)
+			}
+
+			// Validate client certificate
+			return validateClientCertificate(clientCert)
+		}
+	}
+
+	return credentials.NewTLS(tlsConfig), nil
+}
+
+// validateServerCertificate validates the server certificate
+func validateServerCertificate(cert tls.Certificate) error {
+	if len(cert.Certificate) == 0 {
+		return fmt.Errorf("no server certificate found")
+	}
+
+	// Parse the server certificate
+	serverCert, err := x509.ParseCertificate(cert.Certificate[0])
+	if err != nil {
+		return fmt.Errorf("failed to parse server certificate: %w", err)
+	}
+
+	// Check certificate validity period
+	now := time.Now()
+	if now.After(serverCert.NotAfter) {
+		return fmt.Errorf("server certificate has expired")
+	}
+	if now.Before(serverCert.NotBefore) {
+		return fmt.Errorf("server certificate is not yet valid")
+	}
+
+	// Check key usage
+	if serverCert.KeyUsage&x509.KeyUsageDigitalSignature == 0 {
+		return fmt.Errorf("server certificate does not have digital signature key usage")
+	}
+	if serverCert.KeyUsage&x509.KeyUsageKeyEncipherment == 0 {
+		return fmt.Errorf("server certificate does not have key encipherment key usage")
+	}
+
+	// Check extended key usage for server authentication
+	hasServerAuth := false
+	for _, extKeyUsage := range serverCert.ExtKeyUsage {
+		if extKeyUsage == x509.ExtKeyUsageServerAuth {
+			hasServerAuth = true
+			break
+		}
+	}
+	if !hasServerAuth {
+		return fmt.Errorf("server certificate does not have server authentication extended key usage")
+	}
+
+	return nil
+}
+
+// validateClientCertificate validates the client certificate
+func validateClientCertificate(cert *x509.Certificate) error {
+	// Check certificate validity period
+	now := time.Now()
+	if now.After(cert.NotAfter) {
+		return fmt.Errorf("client certificate has expired")
+	}
+	if now.Before(cert.NotBefore) {
+		return fmt.Errorf("client certificate is not yet valid")
+	}
+
+	// Check key usage
+	if cert.KeyUsage&x509.KeyUsageDigitalSignature == 0 {
+		return fmt.Errorf("client certificate does not have digital signature key usage")
+	}
+
+	// Check extended key usage for client authentication
+	hasClientAuth := false
+	for _, extKeyUsage := range cert.ExtKeyUsage {
+		if extKeyUsage == x509.ExtKeyUsageClientAuth {
+			hasClientAuth = true
+			break
+		}
+	}
+	if !hasClientAuth {
+		return fmt.Errorf("client certificate does not have client authentication extended key usage")
+	}
+
+	return nil
 }
 
 // Serve starts the gRPC server and handles graceful shutdown
